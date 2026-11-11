@@ -70,8 +70,15 @@ single-employer defined-benefit pension plan. Find:
 - **Dates are ISO format `YYYY-MM-DD`. Case number is text, with
   leading zeros preserved (never a number).**
 - **AFTAP % is a number 0–100.** A range certification goes in `kind`
-  "range" with the low bound as `aftap`. A late certification goes in
-  `kind` "late". A recertification goes in `kind` "recertified".
+  "range" with the low bound as `aftap`; if a specific certification
+  later superseded the range, give its value and date in
+  `specificAftap` and `specificCertDate`. A late certification goes in
+  `kind` "late"; say whether it took into account UCEBs and amendments
+  that became effective during the plan year before the certification
+  (`lateCounts`: true/false). A recertification goes in `kind`
+  "recertified" with the original value and date in `priorAftap` and
+  `priorCertDate`, the amended value in `aftap` and `certDate`, and
+  whether the change was material in `material` (true/false).
 - **Citation for every AFTAP row**: the document and the Image Viewer
   document number where the certification or stated AFTAP appears. No
   citation, no present answer.
@@ -92,7 +99,7 @@ explanation. The JSON must have exactly these top-level keys:
 
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "caseData": {
     "planName": "string",
     "einPin": "string or null",
@@ -103,6 +110,7 @@ explanation. The JSON must have exactly these top-level keys:
     "dobf": "YYYY-MM-DD or null",
     "fdPy": "MM/DD or null",
     "planYearStart": "MM-DD or null",
+    "adoptionDate": "YYYY-MM-DD or null",
     "toName": "string or null",
     "toSection": "string or null",
     "fromName": "string or null",
@@ -117,7 +125,13 @@ explanation. The JSON must have exactly these top-level keys:
       "certDate": "YYYY-MM-DD or null",
       "source": "Certification | AVR | 5500 SB",
       "ipsRef": "string or null",
-      "kind": "certified | range | late | recertified or null"
+      "kind": "certified | range | late | recertified or null",
+      "priorAftap": "number or null (recertified only)",
+      "priorCertDate": "YYYY-MM-DD or null (recertified only)",
+      "material": "true | false | null (recertified only)",
+      "specificAftap": "number or null (range only)",
+      "specificCertDate": "YYYY-MM-DD or null (range only)",
+      "lateCounts": "true | false | null (late only)"
     }
   ],
   "answers": { "b": "no | na | yes", "c": "no | na | yes", "d": "no | na | yes", "e": "no | na | yes" },

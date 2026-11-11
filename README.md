@@ -1,13 +1,13 @@
 # 436 Generator
 
-![Tests: 86 passing](https://img.shields.io/badge/tests-86%20passing-brightgreen)
-![Unit tests: 53 passing](https://img.shields.io/badge/unit%20tests-53%20passing-brightgreen)
-![Browser tests: 33 passing](https://img.shields.io/badge/browser%20tests-33%20passing-brightgreen)
+![Tests: 146 passing](https://img.shields.io/badge/tests-146%20passing-brightgreen)
+![Unit tests: 85 passing](https://img.shields.io/badge/unit%20tests-85%20passing-brightgreen)
+![Browser tests: 61 passing](https://img.shields.io/badge/browser%20tests-61%20passing-brightgreen)
 ![DOCX checks: passing](https://img.shields.io/badge/docx%20checks-passing-brightgreen)
 ![Network calls: 0](https://img.shields.io/badge/network%20calls-0-brightgreen)
-![Version: v0.1.0](https://img.shields.io/badge/version-v0.1.0-blue)
+![Version: v0.2.0](https://img.shields.io/badge/version-v0.2.0-blue)
 
-Badges show grades measured on v0.1.0. Update badges when tests change.
+Badges show grades measured on v0.2.0. Update badges when tests change.
 
 ## Purpose
 
@@ -93,6 +93,31 @@ PBGC logo on the blue header in both themes.
 
 ## Version
 
-v0.1.0. Template: 436_Evaluation_Template_v0.2.0.docx (blank,
+v0.2.0. Template: 436_Evaluation_Template_v0.2.0.docx (blank,
 2026-07-27). No data from the partially filled Nov 2025 file is used
 anywhere in this repo.
+
+### v0.2.0 — what changed
+
+- Part 3 period rules corrected to Reg. §1.436-1(h), verified against
+  the regulation, IRC §436, and DB Answer Book Ch. 22: April 1
+  step-down only in the [60,70) and [80,90) bands ([70,80) in the
+  first effective year), with the start on the prior-cert date when
+  that certification came on/after April 1; a year with no
+  certification breaks the chain (the next year starts at the
+  presumption on the last day of the prior year); range certifications
+  govern at the floor, with retroactive &lt;60% from Oct 1 if no
+  specific certification by year-end; recertifications apply
+  retroactively if material, prospectively if immaterial; a late
+  certification counts as no certification for its own year unless
+  the (h)(1)(ii)(B) proviso is met.
+- Demo fixture re-derived: 14 periods (2012 now starts &lt;60%).
+- AFTAP grid: Kind column, plus a detail row for range, late, and
+  recertified rows (specific certification, late-counts proviso,
+  original certification and materiality).
+- Step 2: download scraper prompt, paste or upload LLM JSON, validate,
+  load on approval.
+- Plan adoption date in the case header (sets the first effective plan
+  year for the step-down rule).
+- Tests: 146 passing (85 unit, 61 browser). Demo .docx verified
+  (14 periods).

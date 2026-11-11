@@ -66,6 +66,8 @@ const stored = makeDom('http://localhost/', (window) => {
   window.localStorage.setItem('a36-theme', 'dark');
 });
 const nav = makeDom('http://localhost/#welcome');
+const imp = makeDom('http://localhost/');
+const grid = makeDom('http://localhost/');
 
 setTimeout(() => {
   try {
@@ -90,6 +92,11 @@ setTimeout(() => {
     check('demo: case name filled', odoc.getElementById('f-plan-name').value === 'Summit Manufacturing Pension Plan');
     check('demo: case number filled', odoc.getElementById('f-case-number').value === '11223344');
     check('demo: grid has 4 rows', odoc.querySelectorAll('#aftap-grid-body tr').length === 4);
+    check('grid: no detail row for certified rows', odoc.querySelectorAll('#aftap-grid-body tr.detail-row').length === 0);
+    check('grid: every row has a kind select', odoc.querySelectorAll('#aftap-grid-body select[data-f="kind"]').length === 4);
+    const kind0 = odoc.querySelector('#aftap-grid-body select[data-f="kind"]');
+    check('grid: kind defaults to Certified', kind0.value === 'certified');
+    check('grid: kind has 4 options', kind0.querySelectorAll('option').length === 4);
 
     // Add row.
     odoc.getElementById('btn-add-row').click();
@@ -104,7 +111,7 @@ setTimeout(() => {
     // Step 4: computed Part 3 table.
     odoc.getElementById('btn-to-step4').click();
     const rows4 = odoc.querySelectorAll('#part3-card table tbody tr');
-    check('step 4: Part 3 table has 15 periods', rows4.length === 15, 'got ' + rows4.length);
+    check('step 4: Part 3 table has 14 periods', rows4.length === 14, 'got ' + rows4.length);
     check('step 4: first row is N/A 2008', rows4.length > 0 && rows4[0].textContent.indexOf('N/A') >= 0 && rows4[0].textContent.indexOf('2008') >= 0);
     check('step 4: a <60% row exists', odoc.getElementById('part3-card').textContent.indexOf('< 60%') >= 0);
 
@@ -149,6 +156,75 @@ setTimeout(() => {
     menuBtn.click();
     check('menu: opens', ndoc.getElementById('views').classList.contains('open'));
     check('menu: aria-expanded true', menuBtn.getAttribute('aria-expanded') === 'true');
+
+    // ---- Part 5: LLM JSON import ----
+    const idoc = imp.dom.window.document;
+    check('import: no script errors', imp.errors.length === 0, imp.errors.join('; '));
+    check('import: prompt download button exists', !!idoc.getElementById('btn-download-prompt'));
+    idoc.getElementById('btn-demo').click();
+    const goodJson = JSON.stringify({
+      version: '0.2.0',
+      caseData: { planName: 'Imported Plan', caseNumber: '99887766', dopt: '2014-06-30' },
+      history: [{ planYear: 2012, aftap: 90, certDate: '2012-03-01', source: 'Certification', kind: 'certified' }],
+      answers: { b: 'no', c: 'no', d: 'no', e: 'no' },
+      cba: {}
+    });
+    idoc.getElementById('import-json').value = goodJson;
+    idoc.getElementById('btn-validate-import').click();
+    check('import: valid JSON shows Valid', idoc.getElementById('import-result').textContent.indexOf('Valid.') >= 0);
+    check('import: Load button appears', !idoc.getElementById('btn-load-import').hidden);
+    idoc.getElementById('btn-load-import').click();
+    check('import: case name loaded', idoc.getElementById('f-plan-name').value === 'Imported Plan');
+    check('import: grid has 1 row', idoc.querySelectorAll('#aftap-grid-body tr').length === 1);
+    check('import: back on step 1 for review', !idoc.getElementById('step-1').hidden);
+    idoc.getElementById('import-json').value = '{bad json';
+    idoc.getElementById('btn-validate-import').click();
+    check('import: bad JSON shows an error', idoc.getElementById('import-result').textContent.indexOf('Not valid JSON') >= 0);
+    check('import: Load button hidden on error', idoc.getElementById('btn-load-import').hidden);
+    idoc.getElementById('import-json').value = JSON.stringify({
+      caseData: { planName: 'X', caseNumber: '1', dopt: '2014-06-30' },
+      history: [{ planYear: 2012, aftap: 90, certDate: '2012-03-01', source: 'Certification' }],
+      answers: { b: 'no', c: 'no', d: 'maybe', e: 'no' }
+    });
+    idoc.getElementById('btn-validate-import').click();
+    check('import: bad answer shows an error', idoc.getElementById('import-result').textContent.indexOf('answers.d') >= 0);
+    check('import: nothing loaded on bad schema', idoc.getElementById('f-plan-name').value === 'Imported Plan');
+
+    // ---- Part 6: grid kind column, detail rows, paste ----
+    const gdoc = grid.dom.window.document;
+    const gmainRows = () => Array.from(gdoc.querySelectorAll('#aftap-grid-body tr')).filter((tr) => tr.querySelector('input[data-f="planYear"]'));
+    check('grid DOM: no script errors', grid.errors.length === 0, grid.errors.join('; '));
+    gdoc.getElementById('btn-demo').click();
+    const gkind0 = gmainRows()[0].querySelector('select[data-f="kind"]');
+    gkind0.value = 'range';
+    gkind0.dispatchEvent(new grid.dom.window.Event('change', { bubbles: true }));
+    check('grid: kind change sticks', gmainRows()[0].querySelector('select[data-f="kind"]').value === 'range');
+    const gdetail = gdoc.querySelector('#aftap-grid-body tr.detail-row');
+    check('grid: range row shows a detail row', !!gdetail);
+    check('grid: range detail has specific AFTAP input', !!gdetail.querySelector('input[data-f="specificAftap"]'));
+    check('grid: range detail has specific date input', !!gdetail.querySelector('input[data-f="specificCertDate"]'));
+    gdoc.getElementById('btn-add-row').click();
+    check('grid: add row makes 5 main rows', gmainRows().length === 5);
+    const gkind5 = gmainRows()[4].querySelector('select[data-f="kind"]');
+    gkind5.value = 'recertified';
+    gkind5.dispatchEvent(new grid.dom.window.Event('change', { bubbles: true }));
+    const gdetail5 = gdoc.querySelectorAll('#aftap-grid-body tr.detail-row')[1];
+    check('grid: recertified row shows a detail row', !!gdetail5);
+    check('grid: recert detail has prior AFTAP input', !!gdetail5.querySelector('input[data-f="priorAftap"]'));
+    check('grid: recert detail has material select', !!gdetail5.querySelector('select[data-f="material"]'));
+    const gmat = gdetail5.querySelector('select[data-f="material"]');
+    gmat.value = 'yes';
+    gmat.dispatchEvent(new grid.dom.window.Event('change', { bubbles: true }));
+    check('grid: material change sticks', gdetail5.querySelector('select[data-f="material"]').value === 'yes');
+    gdoc.getElementById('btn-add-row').click();
+    const gpasteCell = gmainRows()[5].querySelector('input[data-f="planYear"]');
+    const gpev = new grid.dom.window.Event('paste', { bubbles: true, cancelable: true });
+    gpev.clipboardData = { getData: () => '2013\t95\t2013-02-01\tCertification\tRange\tIVS123' };
+    gpasteCell.dispatchEvent(gpev);
+    const grow6 = gmainRows()[5];
+    check('paste 6 cols: kind is Range', grow6.querySelector('select[data-f="kind"]').value === 'range');
+    check('paste 6 cols: IPS ref set', grow6.querySelector('input[data-f="ipsRef"]').value === 'IVS123');
+    check('paste 6 cols: AFTAP set', grow6.querySelector('input[data-f="aftap"]').value === '95');
     done();
   } catch (e) { console.log('FAIL  browser checks threw: ' + e.message); failures++; done(); }
 }, 100);

@@ -58,7 +58,10 @@ check("duplicate plan year is rejected", A36.validateHistory([
 check("bad source is rejected", A36.validateHistory([{ planYear: 2008, aftap: 70, certDate: "2008-09-15", source: "Word of mouth" }]).errors.length > 0);
 check("case without DOPT is rejected", A36.validateCase({ planName: "X", caseNumber: "1" }).errors.length > 0);
 
-/* --- 2. Part 3 table — demo fixture (15 periods, hand-computed) --- */
+/* --- 2. Part 3 table — demo fixture (14 periods, hand-computed) ---
+   2012 re-derived per Reg. (h)(1)(iii)(A): 2011 was never certified and
+   ended conclusively <60%, so 2012 starts <60% (the chain breaks) until
+   the 85% certification on 2012-05-01. */
 const expected = [
   [1, 2008, "N/A", "N/A", "2008-01-01", "2008-09-14"],
   [2, 2008, "72.5%", "Actual", "2008-09-15", "2008-12-31"],
@@ -70,21 +73,20 @@ const expected = [
   [8, 2011, "69.8%", "Presumed", "2011-01-01", "2011-03-31"],
   [9, 2011, "59.8%", "Presumed", "2011-04-01", "2011-09-30"],
   [10, 2011, "< 60%", "Presumed", "2011-10-01", "2011-12-31"],
-  [11, 2012, "69.8%", "Presumed", "2012-01-01", "2012-03-31"],
-  [12, 2012, "59.8%", "Presumed", "2012-04-01", "2012-04-30"],
-  [13, 2012, "85%", "Actual", "2012-05-01", "2012-12-31"],
-  [14, 2013, "85%", "Presumed", "2013-01-01", "2013-03-31"],
-  [15, 2013, "75%", "Presumed", "2013-04-01", "2013-06-30"],
+  [11, 2012, "< 60%", "Presumed", "2012-01-01", "2012-04-30"],
+  [12, 2012, "85%", "Actual", "2012-05-01", "2012-12-31"],
+  [13, 2013, "85%", "Presumed", "2013-01-01", "2013-03-31"],
+  [14, 2013, "75%", "Presumed", "2013-04-01", "2013-06-30"],
 ];
 const res = A36.buildPeriods(clone(A36.DEMO_HISTORY), "01-01", "2013-06-30", null);
-check("demo builds 15 periods", res.periods.length === 15, "got " + res.periods.length);
+check("demo builds 14 periods", res.periods.length === 14, "got " + res.periods.length);
 check("demo builds with no errors", res.errors.length === 0, res.errors.join("; "));
 let fixtureOk = res.periods.length === expected.length;
 expected.forEach((e, i) => {
   const p = res.periods[i];
   if (!p || p.period !== e[0] || p.planYear !== e[1] || p.aftapDisplay !== e[2] || p.basis !== e[3] || p.startDate !== e[4] || p.endDate !== e[5]) fixtureOk = false;
 });
-check("demo periods match the hand-computed fixture (15/15)", fixtureOk);
+check("demo periods match the hand-computed fixture (14/14)", fixtureOk);
 check("periods are contiguous (each starts the day after the last ends)", res.periods.every((p, i) => {
   if (i === 0) return p.startDate === "2008-01-01";
   const prev = res.periods[i - 1];
@@ -94,15 +96,100 @@ check("periods are contiguous (each starts the day after the last ends)", res.pe
 }));
 check("last period ends at DOPT", res.periods[res.periods.length - 1].endDate === "2013-06-30");
 
-/* --- 3. Late certification --- */
+/* --- 3. Late certification ---
+   Reg. (h)(1)(ii)(B): a certification dated on/after Oct 1 of its plan
+   year is treated as no certification for its own year. The next year
+   starts at the presumption on the last day of the prior year (<60%),
+   NOT at the late certified value. The (h)(2) band test still uses the
+   certified value, so April steps down to 53.36%. With the proviso
+   (lateCounts: the cert took UCEBs/amendments into account), the late
+   value DOES supply the next year's start. */
 const late = A36.buildPeriods([
   { planYear: 2009, aftap: 88.67, certDate: "2009-03-12", source: "Certification", kind: "certified" },
   { planYear: 2010, aftap: 63.36, certDate: "2010-11-29", source: "Certification", kind: "certified" },
 ], "01-01", "2011-12-31", null);
 check("late cert: 2010 has no Actual period", !late.periods.some((p) => p.planYear === 2010 && p.basis === "Actual"));
 check("late cert: 2010 Oct–Dec is conclusively <60%", late.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "< 60%" && p.startDate === "2010-10-01"));
-check("late cert: 2011 presumes the late 63.36%", late.periods.some((p) => p.planYear === 2011 && p.aftapDisplay === "63.36%" && p.basis === "Presumed" && p.startDate === "2011-01-01"));
+check("late cert: 2011 starts <60% (chain breaks)", late.periods.some((p) => p.planYear === 2011 && p.aftapDisplay === "< 60%" && p.startDate === "2011-01-01" && p.endDate === "2011-03-31"));
 check("late cert: 2011 steps down to 53.36% in April", late.periods.some((p) => p.planYear === 2011 && p.aftapDisplay === "53.36%" && p.startDate === "2011-04-01"));
+check("late cert: 2011 Oct–Dec is conclusively <60%", late.periods.some((p) => p.planYear === 2011 && p.aftapDisplay === "< 60%" && p.startDate === "2011-10-01"));
+const lateProviso = A36.buildPeriods([
+  { planYear: 2009, aftap: 88.67, certDate: "2009-03-12", source: "Certification", kind: "certified" },
+  { planYear: 2010, aftap: 63.36, certDate: "2010-11-29", source: "Certification", kind: "certified", lateCounts: true },
+], "01-01", "2011-12-31", null);
+check("late proviso: 2011 starts at the late 63.36%", lateProviso.periods.some((p) => p.planYear === 2011 && p.aftapDisplay === "63.36%" && p.basis === "Presumed" && p.startDate === "2011-01-01"));
+check("late proviso: 2011 steps down to 53.36% in April", lateProviso.periods.some((p) => p.planYear === 2011 && p.aftapDisplay === "53.36%" && p.startDate === "2011-04-01"));
+
+/* --- 3b. April 1 step-down bands (Reg. (h)(2)) ---
+   The step-down applies only when the prior-year AFTAP is in [60,70)
+   or [80,90) — or [70,80) in the first effective plan year. */
+function bandCase(priorAftap, year) {
+  return A36.buildPeriods([
+    { planYear: year - 1, aftap: priorAftap, certDate: (year - 1) + "-02-01", source: "Certification", kind: "certified" },
+  ], "01-01", year + "-12-31", null).periods.filter((p) => p.planYear === year);
+}
+check("band: prior 75% does NOT step down", bandCase(75, 2010).every((p) => p.aftapDisplay !== "65%"));
+check("band: prior 85% steps down to 75% in April", bandCase(85, 2010).some((p) => p.aftapDisplay === "75%" && p.startDate === "2010-04-01"));
+check("band: prior 65% steps down to 55% in April", bandCase(65, 2010).some((p) => p.aftapDisplay === "55%" && p.startDate === "2010-04-01"));
+check("band: prior 95% does NOT step down", bandCase(95, 2010).every((p) => p.aftapDisplay !== "85%"));
+check("band: prior exactly 70% does NOT step down", bandCase(70, 2010).every((p) => p.aftapDisplay !== "60%"));
+check("band: prior exactly 80% steps down to 70%", bandCase(80, 2010).some((p) => p.aftapDisplay === "70%" && p.startDate === "2010-04-01"));
+check("band: prior exactly 60% steps down to 50%", bandCase(60, 2010).some((p) => p.aftapDisplay === "50%" && p.startDate === "2010-04-01"));
+check("band: first effective year 2008, prior 75% steps down", (() => {
+  const ps = A36.buildPeriods([
+    { planYear: 2007, aftap: 75, certDate: "2007-06-01", source: "Certification", kind: "certified" },
+  ], "01-01", "2008-12-31", null).periods.filter((p) => p.planYear === 2008);
+  return ps.some((p) => p.aftapDisplay === "65%" && p.startDate === "2008-04-01");
+})());
+
+/* --- 3c. Step-down timing (Reg. (h)(2)(iii)–(iv)) ---
+   Prior-year certification issued on/after April 1 of the current year:
+   the step-down starts on that certification date, not April 1. */
+check("timing: step-down starts on the late prior cert date", (() => {
+  const ps = A36.buildPeriods([
+    { planYear: 2009, aftap: 88, certDate: "2009-02-01", source: "Certification", kind: "certified" },
+    { planYear: 2010, aftap: 85, certDate: "2011-05-15", source: "Certification", kind: "certified" },
+  ], "01-01", "2011-12-31", null).periods.filter((p) => p.planYear === 2011);
+  /* 2011 starts <60% (2010 ended <60%); band test on the certified 85%
+     gives a step-down to 75% starting on the prior cert date 2011-05-15. */
+  return ps.some((p) => p.aftapDisplay === "75%" && p.startDate === "2011-05-15");
+})());
+
+/* --- 3d. Range certifications (Reg. (h)(4)(ii)) ---
+   A range governs at its floor; it prevents the step-down if issued
+   before April 1; with no specific certification by year-end the AFTAP
+   is deemed <60% from October 1. A specific certification supersedes it
+   from its own date. */
+const rangeStood = A36.buildPeriods([
+  { planYear: 2009, aftap: 65, certDate: "2009-02-01", source: "Certification", kind: "certified" },
+  { planYear: 2010, aftap: 60, certDate: "2010-03-15", source: "Certification", kind: "range" },
+], "01-01", "2010-12-31", null);
+check("range: floor governs as 60% (range)", rangeStood.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "60% (range)" && p.basis === "Actual"));
+check("range: no step-down on top of a pre-April-1 range cert", !rangeStood.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "55%"));
+check("range: deemed <60% from Oct 1 with no specific cert", rangeStood.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "< 60%" && p.startDate === "2010-10-01"));
+const rangeSuper = A36.buildPeriods([
+  { planYear: 2009, aftap: 65, certDate: "2009-02-01", source: "Certification", kind: "certified" },
+  { planYear: 2010, aftap: 60, certDate: "2010-03-15", source: "Certification", kind: "range", specificAftap: 72, specificCertDate: "2010-08-01" },
+], "01-01", "2010-12-31", null);
+check("range superseded: specific 72% governs from Aug 1", rangeSuper.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "72%" && p.startDate === "2010-08-01"));
+check("range superseded: no Oct 1 <60% (specific by year-end)", !rangeSuper.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "< 60%"));
+
+/* --- 3e. Recertifications (Reg. (h)(4)(iii)–(iv)) ---
+   Material: the amended value applies retroactively to the earlier
+   certification date. Immaterial: the original value governs until the
+   amended certification date. */
+const recertMat = A36.buildPeriods([
+  { planYear: 2009, aftap: 90, certDate: "2009-02-01", source: "Certification", kind: "certified" },
+  { planYear: 2010, aftap: 70, certDate: "2010-09-01", source: "Certification", kind: "recertified", priorAftap: 85, priorCertDate: "2010-02-01", material: true },
+], "01-01", "2010-12-31", null);
+check("recert material: amended 70% governs from Feb 1", recertMat.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "70%" && p.startDate === "2010-02-01"));
+check("recert material: original 85% never governs", !recertMat.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "85%"));
+const recertImmat = A36.buildPeriods([
+  { planYear: 2009, aftap: 90, certDate: "2009-02-01", source: "Certification", kind: "certified" },
+  { planYear: 2010, aftap: 70, certDate: "2010-09-01", source: "Certification", kind: "recertified", priorAftap: 85, priorCertDate: "2010-02-01", material: false },
+], "01-01", "2010-12-31", null);
+check("recert immaterial: original 85% governs Feb–Aug", recertImmat.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "85%" && p.startDate === "2010-02-01" && p.endDate === "2010-08-31"));
+check("recert immaterial: amended 70% governs from Sep 1", recertImmat.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "70%" && p.startDate === "2010-09-01"));
 
 /* --- 4. Thresholds --- */
 function th(aftapDisplay, aftapPct) { return A36.thresholds({ aftapDisplay, aftapPct, basis: "Actual" }); }
@@ -161,7 +248,32 @@ check("document.xml has Part 5 signature lines", xml.indexOf("Actuarial Reviewer
 check("docx filename is case + 436", A36.docxFilename(A36.DEMO_CASE) === "11223344436.docx");
 check("docx filename falls back without a case", A36.docxFilename({}) === "436.docx");
 
-/* --- 9. No external calls in the HTML --- */
+/* --- 9. LLM JSON import validation --- */
+function importObj(over){
+  var o = {
+    version: "0.2.0",
+    caseData: clone(A36.DEMO_CASE),
+    history: clone(A36.DEMO_HISTORY),
+    answers: clone(A36.DEMO_ANSWERS),
+    cba: clone(A36.DEMO_CBA),
+    facts: {}
+  };
+  if(over) Object.keys(over).forEach(function(k){ o[k] = over[k]; });
+  return o;
+}
+check("valid import validates with 0 errors", A36.validateImport(importObj()).errors.length === 0);
+check("valid import summary has 4 rows", A36.validateImport(importObj()).summary.rows === 4);
+check("valid import summary has the case number", A36.validateImport(importObj()).summary.caseNumber === "11223344");
+check("import without history is rejected", A36.validateImport(importObj({ history: undefined })).errors.length > 0);
+check("import without caseData is rejected", A36.validateImport(importObj({ caseData: undefined })).errors.length > 0);
+check("import with a bad answer is rejected", A36.validateImport(importObj({ answers: { b: "no", c: "no", d: "maybe", e: "no" } })).errors.length > 0);
+check("import with a bad kind is rejected", A36.validateImport(importObj({ history: [{ planYear: 2008, aftap: 70, certDate: "2008-09-15", source: "Certification", kind: "guess" }] })).errors.length > 0);
+check("import with a bad CBA date is rejected", A36.validateImport(importObj({ cba: { ratificationDate: "2008/01/01" } })).errors.length > 0);
+check("import with a non-numeric 4022 max is rejected", A36.validateImport(importObj({ facts: { f4022Max: "lots" } })).errors.length > 0);
+check("import of a non-object is rejected", A36.validateImport("hello").errors.length > 0);
+check("import of null is rejected", A36.validateImport(null).errors.length > 0);
+
+/* --- 10. No external calls in the HTML --- */
 check("no fetch( in the HTML", html.indexOf("fetch(") < 0);
 check("no <script src in the HTML", html.indexOf("<script src") < 0);
 check("no <link in the HTML", html.indexOf("<link") < 0);

@@ -153,6 +153,8 @@ footer{margin:2rem 0 1rem;border-top:1px solid var(--gray-2);padding-top:1rem}
         <input id="f-fd-py" type="text" autocomplete="off" placeholder="01/01">
         <label for="f-plan-year-start">Plan year start (month-day, e.g. 01-01)</label>
         <input id="f-plan-year-start" type="text" autocomplete="off" placeholder="01-01">
+        <label for="f-adoption-date">Plan adoption date</label>
+        <input id="f-adoption-date" type="date">
         <label for="f-to-name">To (Supervisory Actuary name)</label>
         <input id="f-to-name" type="text" autocomplete="off">
         <label for="f-to-section">To (section, e.g. ASD-D)</label>
@@ -172,10 +174,26 @@ footer{margin:2rem 0 1rem;border-top:1px solid var(--gray-2);padding-top:1rem}
     <div id="step-2" class="step" hidden>
       <h2>Step 2 — AFTAP history</h2>
       <p>Type the certification history in the grid, or paste it from Excel. One row per plan year. The app computes the Part 3 table from this grid.</p>
+      <div class="card" id="import-card">
+        <h3>From an LLM</h3>
+        <p>Download the scraper prompt, feed it with the plan documents to your LLM, and paste the JSON back here. The app validates it. You review it. Only approved JSON loads.</p>
+        <p>
+          <button class="secondary" id="btn-download-prompt" type="button">Download scraper prompt</button>
+          <label for="import-file" class="small">Or open a JSON file:</label>
+          <input id="import-file" type="file" accept=".json,application/json">
+        </p>
+        <label for="import-json">Paste the LLM JSON here</label>
+        <textarea id="import-json" rows="6" spellcheck="false" placeholder='{"version": "0.2.0", "caseData": {...}, "history": [...], "answers": {...}}'></textarea>
+        <p>
+          <button class="secondary" id="btn-validate-import" type="button">Validate JSON</button>
+          <button class="primary" id="btn-load-import" type="button" hidden>Load this JSON</button>
+        </p>
+        <div id="import-result" aria-live="polite"></div>
+      </div>
       <div class="card">
         <table id="aftap-grid" aria-label="AFTAP certification history">
           <thead>
-            <tr><th>Plan year</th><th>AFTAP %</th><th>Certification date</th><th>Source</th><th>IPS ref</th><th></th></tr>
+            <tr><th>Plan year</th><th>AFTAP %</th><th>Certification date</th><th>Source</th><th>Kind</th><th>IPS ref</th><th></th></tr>
           </thead>
           <tbody id="aftap-grid-body"></tbody>
         </table>
@@ -183,7 +201,7 @@ footer{margin:2rem 0 1rem;border-top:1px solid var(--gray-2);padding-top:1rem}
           <button class="secondary" id="btn-add-row" type="button">Add row</button>
           <button class="secondary" id="btn-paste-hint" type="button">Paste from Excel</button>
         </p>
-        <p class="small" id="paste-hint" hidden>Paste a block from Excel (columns: plan year, AFTAP %, certification date, source, IPS ref) into the first cell of an empty row. Tab and newline separate columns and rows.</p>
+        <p class="small" id="paste-hint" hidden>Paste a block from Excel (columns: plan year, AFTAP %, certification date, source, kind, IPS ref) into the first cell of an empty row. Tab and newline separate columns and rows. Kind is Certified, Range, Late, or Recertified — leave it blank for Certified. Five columns (no kind) still paste as before.</p>
         <div id="aftap-errors" aria-live="polite"></div>
       </div>
       <p>
@@ -259,7 +277,7 @@ footer{margin:2rem 0 1rem;border-top:1px solid var(--gray-2);padding-top:1rem}
    The app takes certified/stated AFTAPs as inputs and computes presumed
    AFTAPs, periods, thresholds, and caps. It never certifies an AFTAP.
    Law: IRC 436 / ERISA 206(g) / Reg 1.436-1. See docs for the reference. */
-var A36_VERSION = "0.1.0";
+var A36_VERSION = "0.2.0";
 var A36_THRESH_B = 60, A36_THRESH_C = 80, A36_THRESH_E = 60, A36_THRESH_D = 60, A36_THRESH_BANKRUPTCY = 100;
 var A36_START_YEAR = 2008;
 
@@ -298,15 +316,43 @@ function a36MonthStart(year, mmdd, monthIndex){
 
 /* ---------- AFTAP period builder (Part 3 table) ----------
    Input: certHistory = [{planYear, aftap (number|null), certDate (ISO|null),
-     source ("Certification"|"AVR"|"5500 SB"), ipsRef, kind ("certified"|"range"|"late"|"recertified")}]
+     source ("Certification"|"AVR"|"5500 SB"), ipsRef, kind ("certified"|"range"|"late"|"recertified"),
+     priorAftap, priorCertDate, material (bool|null, recertified only),
+     specificAftap, specificCertDate (range only), lateCounts (bool|null, late only)}]
    plus planYearStart ("MM-DD"), dopt (ISO), adoptionYear (int|null).
    Output: [{period, planYear, aftapPct (number|null), aftapDisplay, basis ("Actual"|"Presumed"|"N/A"),
      startDate (ISO), endDate (ISO)}]
-   Rules: prior-year certified AFTAP presumed from plan year start; -10 pts
-   from the first day of the 4th month if no certification by then;
-   conclusively <60% from the first day of the 10th month if none by then.
-   A certification sets the Actual AFTAP from its date. Boundaries:
-   plan-year starts, certification dates, April 1, October 1, DOPT. */
+   Rules (Reg. §1.436-1(h), verified 2026-11-11 against the regulation,
+   IRC §436, and DB Answer Book Ch. 22):
+   - (h)(1) start: if the prior year was certified during that year, the
+     current year starts at that certified value; otherwise it starts at
+     the presumption in effect on the last day of the prior year — a year
+     with no certification DOES break the chain. A late certification
+     counts as no certification for its own year, unless it took into
+     account UCEBs/amendments in that year (lateCounts), in which case
+     it supplies the next year's prior-year AFTAP. A stated AFTAP with
+     no certification date (AVR / Schedule SB) is the best-known prior
+     value and supplies the next year's start.
+   - (h)(2) April 1 step-down: −10 points only when the prior-year
+     AFTAP is in [60,70) or [80,90) — or [70,80) in the first effective
+     plan year (2008, or the adoption year) — and only if no
+     certification for the current year was made by April 1. It starts
+     April 1 if the prior-year certification predates April 1, else on
+     the date of that prior-year certification.
+   - (h)(3) October 1: if no certification for the current year was
+     made by October 1, the AFTAP is conclusively <60% from October 1.
+   - (h)(4)(ii) range: a range certification governs at the floor of
+     the range (60, 80, or 100); it prevents the (h)(2) step-down if
+     issued before April 1; a specific certification supersedes it from
+     its own date; if no specific certification is issued by year-end,
+     the AFTAP is retroactively deemed <60% as of October 1.
+   - (h)(4)(iii)–(iv) recertification: a material change applies
+     retroactively to the earlier certification date; an immaterial
+     change applies prospectively from the later certification date.
+     Materiality is stated by the actuary (or mapped to the nine
+     deemed-immaterial items) — the app cannot infer it from numbers.
+   Boundaries: plan-year starts, certification dates, April 1,
+   October 1, DOPT. */
 function a36BuildPeriods(certHistory, planYearStart, doptISO, adoptionYear){
   var dopt = a36ParseISO(doptISO);
   if(!dopt) return { errors: ["DOPT is required"], periods: [] };
@@ -320,27 +366,52 @@ function a36BuildPeriods(certHistory, planYearStart, doptISO, adoptionYear){
   var doptYear = dopt.getUTCFullYear();
   if(startYear > doptYear) return { errors: ["Start year is after DOPT"], periods: [] };
 
-  /* Certifications, split into two roles. A certification is late if it
-     is marked kind "late" or made on/after the first day of the 10th
-     month of its plan year: it is no certification for its own year, but
-     it is the presumed AFTAP for the next year. A timely certification
-     sets the Actual AFTAP for its own year from its date. */
-  var certForYear = {};
-  var allCerts = [];
   var errors = [];
-  rows.forEach(function(r){
-    if(r.aftap === null || r.aftap === undefined || r.aftap === "") return;
+  var rowForYear = {};
+  rows.forEach(function(r){ if(!rowForYear[r.planYear]) rowForYear[r.planYear] = r; });
+
+  /* A row's certification events for its own plan year, in date order.
+     Each event: {date (Date), aftap (number), type, range (bool)}.
+     A late certification has no event in its own year: it is treated
+     as no certification for that year (Reg. (h)(1)(ii)(B)). A row with
+     no certification date has no event: its AFTAP is stated, not
+     certified. A recertified row is governed by the recertification
+     rules, not the late rule. */
+  function rowEvents(r, y){
+    var evs = [];
+    if(!r || r.aftap === null || r.aftap === undefined || r.aftap === "") return evs;
     var certDate = r.certDate ? a36ParseISO(r.certDate) : null;
-    if(r.certDate && !certDate){ errors.push("Plan year " + r.planYear + ": certification date is not a valid date"); return; }
-    var oct1 = a36MonthStart(r.planYear, planYearStart, 9);
-    var late = r.kind === "late" || (certDate && a36Cmp(certDate, oct1) >= 0);
-    var entry = { planYear: r.planYear, aftap: +r.aftap, certDate: r.certDate, presumed: late, kind: r.kind || "certified", row: r };
-    allCerts.push(entry);
-    if(!late) certForYear[r.planYear] = entry;
-  });
-  allCerts.sort(function(a,b){ return (a.planYear - b.planYear) || (a36ParseISO(a.certDate || "9999-12-31").getTime() - a36ParseISO(b.certDate || "9999-12-31").getTime()); });
+    if(r.certDate && !certDate){ errors.push("Plan year " + r.planYear + ": certification date is not a valid date"); return evs; }
+    if(r.kind === "range"){
+      if(certDate) evs.push({ date: certDate, aftap: +r.aftap, type: "range", range: true });
+      if(r.specificAftap !== null && r.specificAftap !== undefined && r.specificAftap !== "" && r.specificCertDate){
+        var sd = a36ParseISO(r.specificCertDate);
+        if(!sd) errors.push("Plan year " + r.planYear + ": specific certification date is not a valid date");
+        else evs.push({ date: sd, aftap: +r.specificAftap, type: "specific", range: false });
+      }
+    } else if(r.kind === "recertified"){
+      var pd = r.priorCertDate ? a36ParseISO(r.priorCertDate) : null;
+      if(r.priorCertDate && !pd) errors.push("Plan year " + r.planYear + ": prior certification date is not a valid date");
+      if(r.material === true){
+        /* Material change: the amended value applies from the earlier certification date. */
+        if(pd) evs.push({ date: pd, aftap: +r.aftap, type: "recert", range: false });
+        else if(certDate) evs.push({ date: certDate, aftap: +r.aftap, type: "recert", range: false });
+      } else {
+        /* Immaterial change (or unstated): the original value governs until the amended certification. */
+        if(pd && r.priorAftap !== null && r.priorAftap !== undefined && r.priorAftap !== "") evs.push({ date: pd, aftap: +r.priorAftap, type: "cert", range: false });
+        if(certDate) evs.push({ date: certDate, aftap: +r.aftap, type: "recert", range: false });
+      }
+    } else {
+      var oct1 = a36MonthStart(y, planYearStart, 9);
+      var late = r.kind === "late" || (certDate && a36Cmp(certDate, oct1) >= 0);
+      if(!late && certDate) evs.push({ date: certDate, aftap: +r.aftap, type: "cert", range: false });
+    }
+    evs.sort(function(a,b){ return a.date.getTime() - b.date.getTime(); });
+    return evs;
+  }
 
   var periods = [];
+  var prevLast = null; /* last segment of the previous computed year */
   for(var y = startYear; y <= doptYear; y++){
     var ys = a36YearStart(y, planYearStart);
     var ye = a36AddDays(a36YearStart(y+1, planYearStart), -1);
@@ -348,58 +419,116 @@ function a36BuildPeriods(certHistory, planYearStart, doptISO, adoptionYear){
     var yearEnd = a36Min(ye, dopt);
     var apr1 = a36MonthStart(y, planYearStart, 3);
     var oct1 = a36MonthStart(y, planYearStart, 9);
-    /* Presumed AFTAP at the start of this year: the most recent certified
-       AFTAP from any earlier year (a late certification from the prior
-       year counts — it is the presumed AFTAP for this year). */
-    var prior = null;
-    for(var ci = allCerts.length-1; ci >= 0; ci--){
-      if(allCerts[ci].planYear < y){ prior = allCerts[ci]; break; }
+    var rowY = rowForYear[y] || null;
+    var prevRow = rowForYear[y-1] || null;
+
+    /* --- (h)(1) start value, band value, prior-cert date --- */
+    var prevOct1 = a36MonthStart(y-1, planYearStart, 9);
+    var prevCertDateRaw = prevRow && prevRow.certDate ? a36ParseISO(prevRow.certDate) : null;
+    var prevIsLate = false;
+    if(prevRow && prevRow.kind !== "recertified"){
+      if(prevRow.kind === "late") prevIsLate = true;
+      else if(prevCertDateRaw && a36Cmp(prevCertDateRaw, prevOct1) >= 0) prevIsLate = true;
     }
-    var cert = certForYear[y] || null;
-    var certDate = cert && cert.certDate ? a36ParseISO(cert.certDate) : null;
-
-    /* Boundaries inside this plan year, in order. */
-    var bounds = [ys];
-    if(certDate && a36Cmp(certDate, ys) > 0 && a36Cmp(certDate, yearEnd) <= 0) bounds.push(certDate);
-    if(a36Cmp(apr1, ys) > 0 && a36Cmp(apr1, yearEnd) <= 0) bounds.push(apr1);
-    if(a36Cmp(oct1, ys) > 0 && a36Cmp(oct1, yearEnd) <= 0) bounds.push(oct1);
-    bounds.push(a36AddDays(yearEnd, 1));
-    bounds.sort(function(a,b){ return a.getTime() - b.getTime(); });
-
-    var priorAftap = prior ? prior.aftap : null;
-    for(var i = 0; i < bounds.length - 1; i++){
-      var segStart = bounds[i], segEnd = a36AddDays(bounds[i+1], -1);
-      if(a36Cmp(segStart, yearEnd) > 0) break;
-      segEnd = a36Min(segEnd, yearEnd);
-      var aftap = null, basis = "N/A", display = "N/A";
-      /* No certification made by a date means: none at all, or one dated
-         on/after that date. A certification dated after April 1 does not
-         prevent the April 1 step-down; one dated after October 1 does not
-         prevent the conclusive presumption. */
-      var noCertByApr = !certDate || a36Cmp(certDate, apr1) >= 0;
-      var noCertByOct = !certDate || a36Cmp(certDate, oct1) >= 0;
-      var certified = certDate && a36Cmp(segStart, certDate) >= 0;
-      if(certified){
-        /* A late certification is treated as the presumed AFTAP for the
-           following year, not as an Actual certification of that year. */
-        aftap = cert.aftap; basis = cert.presumed ? "Presumed" : "Actual"; display = a36FmtPct(aftap);
-      } else if(a36Cmp(segStart, oct1) >= 0 && noCertByOct){
-        aftap = null; basis = "Presumed"; display = "< 60%";
-      } else if(a36Cmp(segStart, apr1) >= 0 && noCertByApr && priorAftap !== null){
-        aftap = priorAftap - 10; basis = "Presumed"; display = a36FmtPct(aftap);
-      } else if(priorAftap !== null){
-        aftap = priorAftap; basis = "Presumed"; display = a36FmtPct(aftap);
+    var startVal = null, bandValue = null, prevCertDate = null;
+    if(prevRow && prevIsLate && prevRow.lateCounts === true && prevRow.aftap !== null && prevRow.aftap !== undefined && prevRow.aftap !== ""){
+      /* Late-cert proviso (h)(1)(ii)(B): supplies the next year's prior-year AFTAP. */
+      startVal = { aftapPct: +prevRow.aftap, display: a36FmtPct(+prevRow.aftap) };
+      bandValue = +prevRow.aftap;
+      prevCertDate = prevCertDateRaw;
+    } else if(prevRow && !prevCertDateRaw && prevRow.aftap !== null && prevRow.aftap !== undefined && prevRow.aftap !== ""){
+      /* Stated AFTAP (AVR / Schedule SB), no certification date. */
+      startVal = { aftapPct: +prevRow.aftap, display: a36FmtPct(+prevRow.aftap) };
+      bandValue = +prevRow.aftap;
+    } else {
+      if(prevLast && prevLast.aftapDisplay !== "N/A") startVal = { aftapPct: prevLast.aftapPct, display: prevLast.aftapDisplay };
+      if(prevRow && prevRow.aftap !== null && prevRow.aftap !== undefined && prevRow.aftap !== ""){
+        if(prevIsLate){
+          /* (h)(2) band test uses the certified prior-year value even
+             when the certification was late: (h)(1)(ii)(B) treats a late
+             certification as no certification only for the (h)(1) start
+             presumption, while (h)(2)(iv) affirmatively uses a
+             prior-year certification issued in the current year. */
+          bandValue = +prevRow.aftap;
+          prevCertDate = prevCertDateRaw;
+        } else if(prevRow.kind === "range" && prevRow.specificAftap !== null && prevRow.specificAftap !== undefined && prevRow.specificAftap !== ""){
+          bandValue = +prevRow.specificAftap;
+          prevCertDate = prevRow.specificCertDate ? a36ParseISO(prevRow.specificCertDate) : null;
+        } else if(prevRow.kind === "range"){
+          bandValue = null; /* range stood: deemed <60% at year-end */
+        } else {
+          bandValue = +prevRow.aftap;
+          prevCertDate = prevCertDateRaw;
+        }
       } else {
-        aftap = null; basis = "N/A"; display = "N/A";
+        bandValue = startVal ? startVal.aftapPct : null;
       }
-      /* Merge with the previous period if same year, same AFTAP and basis. */
+    }
+
+    /* --- (h)(2) April 1 step-down --- */
+    var isFirstEffective = (y === A36_START_YEAR) || (adoptionYear && y === adoptionYear);
+    var stepDownApplies = false, stepDownStart = null, stepDownValue = null;
+    if(bandValue !== null && bandValue !== undefined){
+      var inBand = (bandValue >= 60 && bandValue < 70) || (bandValue >= 80 && bandValue < 90);
+      if(!inBand && isFirstEffective) inBand = (bandValue >= 70 && bandValue < 80);
+      if(inBand){
+        stepDownApplies = true;
+        stepDownValue = bandValue - 10;
+        stepDownStart = apr1;
+        if(prevCertDate && a36Cmp(prevCertDate, apr1) >= 0) stepDownStart = prevCertDate;
+      }
+    }
+
+    /* --- this year's certification events --- */
+    var events = rowEvents(rowY, y);
+    var hasRange = rowY && rowY.kind === "range";
+    var hasSpecific = events.some(function(e){ return e.type === "specific"; });
+    /* (h)(3) October 1 conclusive presumption: no certification for
+       this year made by October 1. A standing range certification is
+       deemed <60% from October 1 unless a specific certification was
+       issued by year-end. */
+    var conclusiveOct1 = hasRange ? !hasSpecific : !events.some(function(e){ return a36Cmp(e.date, oct1) < 0; });
+
+    /* --- dated value changes inside this plan year --- */
+    /* Each change: {date, aftapPct, display, basis, prio}. Later changes
+       win; on the same date the higher prio wins (start 0, step-down 1,
+       certification event 2). */
+    var changes = [];
+    changes.push({ date: ys, aftapPct: startVal ? startVal.aftapPct : null, display: startVal ? startVal.display : "N/A", basis: startVal ? "Presumed" : "N/A", prio: 0 });
+    var noEventByStepDown = stepDownStart ? !events.some(function(e){ return a36Cmp(e.date, stepDownStart) <= 0; }) : false;
+    if(stepDownApplies && stepDownStart && noEventByStepDown){
+      changes.push({ date: stepDownStart, aftapPct: stepDownValue, display: a36FmtPct(stepDownValue), basis: "Presumed", prio: 1 });
+    }
+    events.forEach(function(e){
+      if(a36Cmp(e.date, yearEnd) > 0) return; /* dated after this plan year: not an event here */
+      if(hasRange && !hasSpecific && e.type === "range" && a36Cmp(e.date, oct1) >= 0) return; /* range after Oct 1 never governs: deemed <60% from Oct 1 */
+      var d = a36Cmp(e.date, ys) < 0 ? ys : e.date;
+      changes.push({ date: d, aftapPct: e.aftap, display: a36FmtPct(e.aftap) + (e.range ? " (range)" : ""), basis: "Actual", prio: 2 });
+    });
+    var noEventByOct1 = !events.some(function(e){ return a36Cmp(e.date, oct1) <= 0; });
+    /* A standing range certification is deemed <60% from October 1 even
+       though the range event itself predates October 1: the floor governs
+       only until September 30. */
+    if(conclusiveOct1 && (noEventByOct1 || (hasRange && !hasSpecific))){
+      changes.push({ date: oct1, aftapPct: null, display: "< 60%", basis: "Presumed", prio: 1 });
+    }
+    changes.sort(function(a,b){ return (a.date.getTime() - b.date.getTime()) || (a.prio - b.prio); });
+
+    /* Cut segments at the changes, clipped to this plan year. */
+    for(var i = 0; i < changes.length; i++){
+      var segStart = changes[i].date;
+      if(a36Cmp(segStart, yearEnd) > 0) continue;
+      var nextDate = (i+1 < changes.length) ? changes[i+1].date : a36AddDays(yearEnd, 1);
+      var segEnd = a36Min(a36AddDays(nextDate, -1), yearEnd);
+      if(a36Cmp(segStart, segEnd) > 0) continue;
       var last = periods[periods.length-1];
-      if(last && last.planYear === y && last.aftapDisplay === display && last.basis === basis){
+      if(last && last.planYear === y && last.aftapDisplay === changes[i].display && last.basis === changes[i].basis){
         last.endDate = a36FmtISO(segEnd);
       } else {
-        periods.push({ period: periods.length+1, planYear: y, aftapPct: aftap, aftapDisplay: display, basis: basis, startDate: a36FmtISO(segStart), endDate: a36FmtISO(segEnd) });
+        periods.push({ period: periods.length+1, planYear: y, aftapPct: changes[i].aftapPct, aftapDisplay: changes[i].display, basis: changes[i].basis, startDate: a36FmtISO(segStart), endDate: a36FmtISO(segEnd) });
       }
     }
+    prevLast = periods.length ? periods[periods.length-1] : null;
   }
   return { errors: errors, periods: periods };
 }
@@ -529,6 +658,26 @@ function a36ValidateHistory(rows){
     if(r.certDate && !A36_DATE_RE.test(r.certDate)) errors.push(where + ": certification date must be YYYY-MM-DD");
     if(r.source && A36_SOURCES.indexOf(r.source) < 0) errors.push(where + ": source must be Certification, AVR, or 5500 SB");
     if(r.kind && A36_KINDS.indexOf(r.kind) < 0) errors.push(where + ": kind must be certified, range, late, or recertified");
+    if(r.kind === "recertified"){
+      if(r.priorAftap === null || r.priorAftap === undefined || r.priorAftap === "" || isNaN(+r.priorAftap) || +r.priorAftap < 0 || +r.priorAftap > 100) errors.push(where + ": recertified row needs the original AFTAP % (0–100)");
+      if(!r.priorCertDate || !A36_DATE_RE.test(r.priorCertDate)) errors.push(where + ": recertified row needs the original certification date (YYYY-MM-DD)");
+      if(typeof r.material !== "boolean") errors.push(where + ": recertified row needs material change? (yes/no)");
+    } else {
+      if(r.priorAftap !== null && r.priorAftap !== undefined && r.priorAftap !== "") errors.push(where + ": original AFTAP % is only for recertified rows");
+      if(r.priorCertDate) errors.push(where + ": original certification date is only for recertified rows");
+      if(r.material !== null && r.material !== undefined) errors.push(where + ": material change? is only for recertified rows");
+    }
+    if(r.kind === "range"){
+      var hasSpec = (r.specificAftap !== null && r.specificAftap !== undefined && r.specificAftap !== "") || r.specificCertDate;
+      if(hasSpec){
+        if(r.specificAftap === null || r.specificAftap === undefined || r.specificAftap === "" || isNaN(+r.specificAftap) || +r.specificAftap < 0 || +r.specificAftap > 100) errors.push(where + ": range row needs the specific AFTAP % (0–100)");
+        if(!r.specificCertDate || !A36_DATE_RE.test(r.specificCertDate)) errors.push(where + ": range row needs the specific certification date (YYYY-MM-DD)");
+      }
+    } else {
+      if(r.specificAftap !== null && r.specificAftap !== undefined && r.specificAftap !== "") errors.push(where + ": specific AFTAP % is only for range rows");
+      if(r.specificCertDate) errors.push(where + ": specific certification date is only for range rows");
+    }
+    if(r.lateCounts !== null && r.lateCounts !== undefined && typeof r.lateCounts !== "boolean") errors.push(where + ": late-counts must be yes/no");
   });
   return { errors: errors };
 }
@@ -541,6 +690,7 @@ function a36ValidateCase(c){
   if(c.dotr && !A36_DATE_RE.test(c.dotr)) errors.push("DOTR must be YYYY-MM-DD");
   if(c.bpd && !A36_DATE_RE.test(c.bpd)) errors.push("BPD must be YYYY-MM-DD");
   if(c.dobf && !A36_DATE_RE.test(c.dobf)) errors.push("DOBF must be YYYY-MM-DD");
+  if(c.adoptionDate && !A36_DATE_RE.test(c.adoptionDate)) errors.push("Plan adoption date must be YYYY-MM-DD");
   return { errors: errors };
 }
 
@@ -548,8 +698,9 @@ function a36ValidateCase(c){
    Summit Manufacturing Pension Plan, case 11223344, DOPT 2013-06-30.
    Certification history chosen to exercise every period rule:
    N/A start, certification, presumed carry-forward, April 1 step-down,
-   October 1 conclusive presumption, a year with no certification, DOPT cutoff.
-   Expected periods are in tests/run.cjs (15 periods, hand-computed). */
+   October 1 conclusive presumption, a year with no certification
+   (the chain breaks: 2012 starts <60%), DOPT cutoff.
+   Expected periods are in tests/run.cjs (14 periods, hand-computed). */
 var A36_DEMO_CASE = {
   planName: "Summit Manufacturing Pension Plan", einPin: "12-3456789",
   caseNumber: "11223344", dopt: "2013-06-30", dotr: "2013-09-15", bpd: "2013-06-30",
@@ -567,7 +718,7 @@ var A36_DEMO_ANSWERS = { b: "no", c: "no", d: "yes", e: "no" };
 var A36_DEMO_CBA = { ratificationDate: "", effectiveDate: "", expirationDate: "", ipsRef: "" };
 
 /* PROMPT-START */
-var A36_SCRAPER_PROMPT = "# 436 \u2014 Section 436 Limitations Scraper Prompt\n\nUse this prompt with an LLM of your choice. Attach the plan documents\n**and** the other associated documents \u2014 plan document, amendments,\nrestatements, SPD, trust agreement, actuarial valuation reports (AVR),\nAFTAP certifications, Form 5500 Schedule SB, TWG memo, trusteeship\nagreement, prior administrator data, collective bargaining agreement,\nanything about the plan \u2014 together with this prompt. The LLM must return\n**only** the JSON payload described below. That JSON is a *proposal*: it\nis fed back into the 436 Generator app, validated against\n`schema/436.schema.json`, reviewed by a human, and only approved JSON is\nused to write the \u00a7436 Evaluation Word document. The LLM never fills the\nWord document and never certifies an AFTAP. PBGC will not calculate or\ncertify a plan's AFTAP.\n\n## Your task\n\nYou are gathering the inputs for a \u00a7436 Evaluation for a terminated\nsingle-employer defined-benefit pension plan. Find:\n\n1. **Case header.** Plan name, EIN/PIN, PBGC case number, DOPT, DOTR,\n   BPD, DOBF (plan date of benefit freeze), FD-PY, plan year start\n   (month-day), plan adoption date.\n2. **AFTAP history.** For each plan year from the later of the plan\n   adoption date and PY2007: the certified AFTAP %, the signed\n   certification date, the source, and the Image Viewer document number.\n   Where no certification exists, give the AFTAP stated in the AVR or\n   Form 5500 Schedule SB and say so. Flag range certifications (give\n   the range), late certifications (certified on/after Oct 1 of that\n   plan year), and recertifications (original value and date, amended\n   value and date, whether the change was material).\n3. **Part 1 answers.** For each of (b), (c), (d), (e), answer No, N/A,\n   or Yes, and give the facts behind the answer:\n   - (b) Did the plan provide a UCEB (early unreduced benefits or\n     temporary supplements due to a plant shutdown) for an event on or\n     after FD-PY2008 and before DOPT? Describe the UCEB, the group,\n     the event dates, and whether the plan paid it.\n   - (c) Did amendments increasing benefit liabilities have an adoption\n     or effective date on or after the later of the plan's adoption date\n     and FD-PY2008 and before DOPT? Give each amendment's dates,\n     description, and whether it took effect. Note the N/A reasons:\n     plan in effect less than five full plan years; increase only for\n     future periods (on or after DOPT); mandatory vesting increase;\n     only \u00a7401(a)(17) compensation limits.\n   - (d) Did the plan provide prohibited payments (non-de minimis lump\n     sums, period-certain benefits, non-life-annuity forms) with an ASD\n     or BCD on or after the later of the plan's adoption date and\n     FD-PY2008? List each payment and its date. Note if benefits did\n     not accrue on or after 09/01/2005 (state the date accruals ceased).\n   - (e) Did benefits accrue for any participant on or after the later\n     of the plan's adoption date and FD-PY2008? Give the accrual freeze\n     date and whether accruals were restored.\n4. **CBA.** Was the plan maintained under a collective bargaining\n   agreement ratified before 01/01/2008 and in effect on 01/01/2008?\n   Give the ratification, effective, and expiration dates and the IPS\n   document number.\n5. **Other facts.** Sponsor bankruptcy status and dates (for \u00a7436(d)(2)).\n   Whether the plan was a fully-insured \u00a7412(e)(3) plan and, if so, the\n   date it converted to a traditional defined benefit plan. The PBGC\n   maximum guarantee amount for any participant with a prohibited\n   payment (for the (d)(3) cap), if known.\n\n## Rules\n\n- **Summarise, do not copy verbatim \u2014 ASD STE 100 minimal style.**\n  Every value must be the **smallest string that conveys the meaning**.\n  Keep ages, service years, percentages, dollar amounts, and dates\n  **exact**. If stripping verbiage would lose meaning (a condition, an\n  exception, a date), keep the longer form.\n- **Dates are ISO format `YYYY-MM-DD`. Case number is text, with\n  leading zeros preserved (never a number).**\n- **AFTAP % is a number 0\u2013100.** A range certification goes in `kind`\n  \"range\" with the low bound as `aftap`. A late certification goes in\n  `kind` \"late\". A recertification goes in `kind` \"recertified\".\n- **Citation for every AFTAP row**: the document and the Image Viewer\n  document number where the certification or stated AFTAP appears. No\n  citation, no present answer.\n- **Do not guess.** A missing answer is a correct answer. A guessed\n  value is an error. If a certification cannot be found, say so and\n  give the AVR or Schedule SB value instead, with the source named.\n- **Never return a full masked value** (no full SSN, no full account\n  number). This evaluation lists plan-level facts and AFTAPs, not\n  participant values.\n- **You do not certify an AFTAP.** You report the AFTAPs the enrolled\n  actuary certified or the AVR / Schedule SB states, with dates and\n  sources.\n\n## Output format\n\nReturn **only** valid JSON, no markdown fences, no commentary, no\nexplanation. The JSON must have exactly these top-level keys:\n\n```json\n{\n  \"version\": \"0.1.0\",\n  \"caseData\": {\n    \"planName\": \"string\",\n    \"einPin\": \"string or null\",\n    \"caseNumber\": \"string (text, leading zeros preserved)\",\n    \"dopt\": \"YYYY-MM-DD\",\n    \"dotr\": \"YYYY-MM-DD or null\",\n    \"bpd\": \"YYYY-MM-DD or null\",\n    \"dobf\": \"YYYY-MM-DD or null\",\n    \"fdPy\": \"MM/DD or null\",\n    \"planYearStart\": \"MM-DD or null\",\n    \"toName\": \"string or null\",\n    \"toSection\": \"string or null\",\n    \"fromName\": \"string or null\",\n    \"fromSection\": \"string or null\",\n    \"memoDate\": \"YYYY-MM-DD or null\",\n    \"subject\": \"\u00a7436 Evaluation\"\n  },\n  \"history\": [\n    {\n      \"planYear\": 2008,\n      \"aftap\": 72.5,\n      \"certDate\": \"YYYY-MM-DD or null\",\n      \"source\": \"Certification | AVR | 5500 SB\",\n      \"ipsRef\": \"string or null\",\n      \"kind\": \"certified | range | late | recertified or null\"\n    }\n  ],\n  \"answers\": { \"b\": \"no | na | yes\", \"c\": \"no | na | yes\", \"d\": \"no | na | yes\", \"e\": \"no | na | yes\" },\n  \"cba\": {\n    \"ratificationDate\": \"YYYY-MM-DD or null\",\n    \"effectiveDate\": \"YYYY-MM-DD or null\",\n    \"expirationDate\": \"YYYY-MM-DD or null\",\n    \"ipsRef\": \"string or null\"\n  },\n  \"facts\": {\n    \"ucebPaid\": true | false | null,\n    \"accrualsRestored\": true | false | null,\n    \"accrualFreezeDate\": \"YYYY-MM-DD or null\",\n    \"f4022Max\": \"number or null\",\n    \"amendmentDates\": [{ \"date\": \"YYYY-MM-DD\", \"description\": \"string\" }],\n    \"paymentDates\": [{ \"date\": \"YYYY-MM-DD\", \"description\": \"string\" }]\n  }\n}\n```\n\n## Workflow reminder (for the human, not the LLM)\n\n1. Download this prompt from the 436 Generator app.\n2. Feed the plan documents and associated documents + this prompt to\n   your LLM (Microsoft Copilot in the office, any LLM at home).\n3. Take the JSON the LLM returns and upload / paste it back into the\n   436 Generator app.\n4. The app validates the JSON against the schema, flags missing /\n   uncited items, and you review and approve each one.\n5. Only approved JSON writes the filled \u00a7436 Evaluation Word document.\n   The app computes the Part 3 AFTAP table and drafts the Part 4\n   conclusions from the approved data. You review the draft before\n   download.\n";
+var A36_SCRAPER_PROMPT = "# 436 \u2014 Section 436 Limitations Scraper Prompt\n\nUse this prompt with an LLM of your choice. Attach the plan documents\n**and** the other associated documents \u2014 plan document, amendments,\nrestatements, SPD, trust agreement, actuarial valuation reports (AVR),\nAFTAP certifications, Form 5500 Schedule SB, TWG memo, trusteeship\nagreement, prior administrator data, collective bargaining agreement,\nanything about the plan \u2014 together with this prompt. The LLM must return\n**only** the JSON payload described below. That JSON is a *proposal*: it\nis fed back into the 436 Generator app, validated against\n`schema/436.schema.json`, reviewed by a human, and only approved JSON is\nused to write the \u00a7436 Evaluation Word document. The LLM never fills the\nWord document and never certifies an AFTAP. PBGC will not calculate or\ncertify a plan's AFTAP.\n\n## Your task\n\nYou are gathering the inputs for a \u00a7436 Evaluation for a terminated\nsingle-employer defined-benefit pension plan. Find:\n\n1. **Case header.** Plan name, EIN/PIN, PBGC case number, DOPT, DOTR,\n   BPD, DOBF (plan date of benefit freeze), FD-PY, plan year start\n   (month-day), plan adoption date.\n2. **AFTAP history.** For each plan year from the later of the plan\n   adoption date and PY2007: the certified AFTAP %, the signed\n   certification date, the source, and the Image Viewer document number.\n   Where no certification exists, give the AFTAP stated in the AVR or\n   Form 5500 Schedule SB and say so. Flag range certifications (give\n   the range), late certifications (certified on/after Oct 1 of that\n   plan year), and recertifications (original value and date, amended\n   value and date, whether the change was material).\n3. **Part 1 answers.** For each of (b), (c), (d), (e), answer No, N/A,\n   or Yes, and give the facts behind the answer:\n   - (b) Did the plan provide a UCEB (early unreduced benefits or\n     temporary supplements due to a plant shutdown) for an event on or\n     after FD-PY2008 and before DOPT? Describe the UCEB, the group,\n     the event dates, and whether the plan paid it.\n   - (c) Did amendments increasing benefit liabilities have an adoption\n     or effective date on or after the later of the plan's adoption date\n     and FD-PY2008 and before DOPT? Give each amendment's dates,\n     description, and whether it took effect. Note the N/A reasons:\n     plan in effect less than five full plan years; increase only for\n     future periods (on or after DOPT); mandatory vesting increase;\n     only \u00a7401(a)(17) compensation limits.\n   - (d) Did the plan provide prohibited payments (non-de minimis lump\n     sums, period-certain benefits, non-life-annuity forms) with an ASD\n     or BCD on or after the later of the plan's adoption date and\n     FD-PY2008? List each payment and its date. Note if benefits did\n     not accrue on or after 09/01/2005 (state the date accruals ceased).\n   - (e) Did benefits accrue for any participant on or after the later\n     of the plan's adoption date and FD-PY2008? Give the accrual freeze\n     date and whether accruals were restored.\n4. **CBA.** Was the plan maintained under a collective bargaining\n   agreement ratified before 01/01/2008 and in effect on 01/01/2008?\n   Give the ratification, effective, and expiration dates and the IPS\n   document number.\n5. **Other facts.** Sponsor bankruptcy status and dates (for \u00a7436(d)(2)).\n   Whether the plan was a fully-insured \u00a7412(e)(3) plan and, if so, the\n   date it converted to a traditional defined benefit plan. The PBGC\n   maximum guarantee amount for any participant with a prohibited\n   payment (for the (d)(3) cap), if known.\n\n## Rules\n\n- **Summarise, do not copy verbatim \u2014 ASD STE 100 minimal style.**\n  Every value must be the **smallest string that conveys the meaning**.\n  Keep ages, service years, percentages, dollar amounts, and dates\n  **exact**. If stripping verbiage would lose meaning (a condition, an\n  exception, a date), keep the longer form.\n- **Dates are ISO format `YYYY-MM-DD`. Case number is text, with\n  leading zeros preserved (never a number).**\n- **AFTAP % is a number 0\u2013100.** A range certification goes in `kind`\n  \"range\" with the low bound as `aftap`; if a specific certification\n  later superseded the range, give its value and date in\n  `specificAftap` and `specificCertDate`. A late certification goes in\n  `kind` \"late\"; say whether it took into account UCEBs and amendments\n  that became effective during the plan year before the certification\n  (`lateCounts`: true/false). A recertification goes in `kind`\n  \"recertified\" with the original value and date in `priorAftap` and\n  `priorCertDate`, the amended value in `aftap` and `certDate`, and\n  whether the change was material in `material` (true/false).\n- **Citation for every AFTAP row**: the document and the Image Viewer\n  document number where the certification or stated AFTAP appears. No\n  citation, no present answer.\n- **Do not guess.** A missing answer is a correct answer. A guessed\n  value is an error. If a certification cannot be found, say so and\n  give the AVR or Schedule SB value instead, with the source named.\n- **Never return a full masked value** (no full SSN, no full account\n  number). This evaluation lists plan-level facts and AFTAPs, not\n  participant values.\n- **You do not certify an AFTAP.** You report the AFTAPs the enrolled\n  actuary certified or the AVR / Schedule SB states, with dates and\n  sources.\n\n## Output format\n\nReturn **only** valid JSON, no markdown fences, no commentary, no\nexplanation. The JSON must have exactly these top-level keys:\n\n```json\n{\n  \"version\": \"0.2.0\",\n  \"caseData\": {\n    \"planName\": \"string\",\n    \"einPin\": \"string or null\",\n    \"caseNumber\": \"string (text, leading zeros preserved)\",\n    \"dopt\": \"YYYY-MM-DD\",\n    \"dotr\": \"YYYY-MM-DD or null\",\n    \"bpd\": \"YYYY-MM-DD or null\",\n    \"dobf\": \"YYYY-MM-DD or null\",\n    \"fdPy\": \"MM/DD or null\",\n    \"planYearStart\": \"MM-DD or null\",\n    \"adoptionDate\": \"YYYY-MM-DD or null\",\n    \"toName\": \"string or null\",\n    \"toSection\": \"string or null\",\n    \"fromName\": \"string or null\",\n    \"fromSection\": \"string or null\",\n    \"memoDate\": \"YYYY-MM-DD or null\",\n    \"subject\": \"\u00a7436 Evaluation\"\n  },\n  \"history\": [\n    {\n      \"planYear\": 2008,\n      \"aftap\": 72.5,\n      \"certDate\": \"YYYY-MM-DD or null\",\n      \"source\": \"Certification | AVR | 5500 SB\",\n      \"ipsRef\": \"string or null\",\n      \"kind\": \"certified | range | late | recertified or null\",\n      \"priorAftap\": \"number or null (recertified only)\",\n      \"priorCertDate\": \"YYYY-MM-DD or null (recertified only)\",\n      \"material\": \"true | false | null (recertified only)\",\n      \"specificAftap\": \"number or null (range only)\",\n      \"specificCertDate\": \"YYYY-MM-DD or null (range only)\",\n      \"lateCounts\": \"true | false | null (late only)\"\n    }\n  ],\n  \"answers\": { \"b\": \"no | na | yes\", \"c\": \"no | na | yes\", \"d\": \"no | na | yes\", \"e\": \"no | na | yes\" },\n  \"cba\": {\n    \"ratificationDate\": \"YYYY-MM-DD or null\",\n    \"effectiveDate\": \"YYYY-MM-DD or null\",\n    \"expirationDate\": \"YYYY-MM-DD or null\",\n    \"ipsRef\": \"string or null\"\n  },\n  \"facts\": {\n    \"ucebPaid\": true | false | null,\n    \"accrualsRestored\": true | false | null,\n    \"accrualFreezeDate\": \"YYYY-MM-DD or null\",\n    \"f4022Max\": \"number or null\",\n    \"amendmentDates\": [{ \"date\": \"YYYY-MM-DD\", \"description\": \"string\" }],\n    \"paymentDates\": [{ \"date\": \"YYYY-MM-DD\", \"description\": \"string\" }]\n  }\n}\n```\n\n## Workflow reminder (for the human, not the LLM)\n\n1. Download this prompt from the 436 Generator app.\n2. Feed the plan documents and associated documents + this prompt to\n   your LLM (Microsoft Copilot in the office, any LLM at home).\n3. Take the JSON the LLM returns and upload / paste it back into the\n   436 Generator app.\n4. The app validates the JSON against the schema, flags missing /\n   uncited items, and you review and approve each one.\n5. Only approved JSON writes the filled \u00a7436 Evaluation Word document.\n   The app computes the Part 3 AFTAP table and drafts the Part 4\n   conclusions from the approved data. You review the draft before\n   download.\n";
 /* PROMPT-END */
 
 /* ---------- .docx writer (minimal OOXML, built from scratch) ---------- */
@@ -744,7 +895,7 @@ function a36ToggleTheme(){
 }
 
 /* ---------- state + UI ---------- */
-var A36_STATE = { caseData: {}, history: [], answers: { b: "", c: "", d: "", e: "" }, cba: { ratificationDate: "", effectiveDate: "", expirationDate: "", ipsRef: "" }, periods: [], draft: { b: "", c: "", d: "", e: "" }, step: 1 };
+var A36_STATE = { caseData: {}, history: [], answers: { b: "", c: "", d: "", e: "" }, cba: { ratificationDate: "", effectiveDate: "", expirationDate: "", ipsRef: "" }, facts: {}, periods: [], draft: { b: "", c: "", d: "", e: "" }, step: 1 };
 function a36El(id){ return document.getElementById(id); }
 function a36ShowStep(n){
   A36_STATE.step = n;
@@ -765,6 +916,7 @@ function a36ReadCase(){
     planName: g("f-plan-name"), einPin: g("f-ein-pin"), caseNumber: g("f-case-number"),
     dopt: g("f-dopt"), dotr: g("f-dotr"), bpd: g("f-bpd"), dobf: g("f-dobf"),
     fdPy: g("f-fd-py"), planYearStart: g("f-plan-year-start") || "01-01",
+    adoptionDate: g("f-adoption-date"),
     toName: g("f-to-name"), toSection: g("f-to-section"), fromName: g("f-from-name"),
     fromSection: g("f-from-section"), memoDate: g("f-memo-date"), subject: "§436 Evaluation"
   };
@@ -774,6 +926,7 @@ function a36WriteCase(c){
   s("f-plan-name", c.planName); s("f-ein-pin", c.einPin); s("f-case-number", c.caseNumber);
   s("f-dopt", c.dopt); s("f-dotr", c.dotr); s("f-bpd", c.bpd); s("f-dobf", c.dobf);
   s("f-fd-py", c.fdPy); s("f-plan-year-start", c.planYearStart);
+  s("f-adoption-date", c.adoptionDate);
   s("f-to-name", c.toName); s("f-to-section", c.toSection); s("f-from-name", c.fromName);
   s("f-from-section", c.fromSection); s("f-memo-date", c.memoDate);
 }
@@ -790,9 +943,39 @@ function a36RenderGrid(){
       '<td><select data-f="source" data-i="' + i + '" aria-label="Source row ' + (i+1) + '">' +
         A36_SOURCES.map(function(s){ return '<option' + (r.source === s ? ' selected' : '') + '>' + s + '</option>'; }).join("") +
       '</select></td>' +
+      '<td><select data-f="kind" data-i="' + i + '" aria-label="Kind row ' + (i+1) + '">' +
+        A36_KINDS.map(function(k){ return '<option value="' + k + '"' + ((r.kind || "certified") === k ? ' selected' : '') + '>' + k.charAt(0).toUpperCase() + k.slice(1) + '</option>'; }).join("") +
+      '</select></td>' +
       '<td><input type="text" data-f="ipsRef" data-i="' + i + '" value="' + (r.ipsRef || "") + '" aria-label="IPS ref row ' + (i+1) + '"></td>' +
       '<td><button type="button" class="danger" data-del="' + i + '" aria-label="Delete row ' + (i+1) + '">Delete</button></td>';
     body.appendChild(tr);
+    /* Detail row for kinds that need more than one value: a recertified
+       row needs the original certification and whether the change was
+       material; a range row needs the specific certification that
+       superseded it, if any; a late row needs the (h)(1)(ii)(B) proviso
+       (whether the certification took UCEBs/amendments into account). */
+    var kind = r.kind || "certified";
+    if(kind === "recertified" || kind === "range" || kind === "late"){
+      var dtr = document.createElement("tr");
+      dtr.className = "detail-row";
+      var cells = "";
+      if(kind === "recertified"){
+        cells =
+          '<label>Original AFTAP % <input type="number" step="0.01" min="0" max="100" data-f="priorAftap" data-i="' + i + '" value="' + (r.priorAftap === null || r.priorAftap === undefined ? "" : r.priorAftap) + '"></label> ' +
+          '<label>Original cert date <input type="date" data-f="priorCertDate" data-i="' + i + '" value="' + (r.priorCertDate || "") + '"></label> ' +
+          '<label>Material change? <select data-f="material" data-i="' + i + '"><option value=""' + (r.material === null || r.material === undefined ? " selected" : "") + '>—</option><option value="yes"' + (r.material === true ? " selected" : "") + '>Yes</option><option value="no"' + (r.material === false ? " selected" : "") + '>No</option></select></label>';
+      } else if(kind === "range"){
+        cells =
+          '<label>Specific AFTAP % <input type="number" step="0.01" min="0" max="100" data-f="specificAftap" data-i="' + i + '" value="' + (r.specificAftap === null || r.specificAftap === undefined ? "" : r.specificAftap) + '"></label> ' +
+          '<label>Specific cert date <input type="date" data-f="specificCertDate" data-i="' + i + '" value="' + (r.specificCertDate || "") + '"></label> ' +
+          '<span>Leave blank if no specific certification was issued by year-end: the AFTAP is then deemed &lt;60% from Oct 1.</span>';
+      } else {
+        cells =
+          '<label><input type="checkbox" data-f="lateCounts" data-i="' + i + '"' + (r.lateCounts === true ? " checked" : "") + '> This certification took into account UCEBs and amendments that became effective during the plan year before the certification date.</label>';
+      }
+      dtr.innerHTML = '<td colspan="7">' + cells + '</td>';
+      body.appendChild(dtr);
+    }
   });
   body.querySelectorAll("input,select").forEach(function(inp){
     inp.addEventListener("change", function(){
@@ -800,9 +983,12 @@ function a36RenderGrid(){
       var r = A36_STATE.history[i];
       if(!r) return;
       if(f === "planYear") r.planYear = inp.value ? +inp.value : null;
-      else if(f === "aftap") r.aftap = inp.value === "" ? null : +inp.value;
+      else if(f === "aftap" || f === "priorAftap" || f === "specificAftap") r[f] = inp.value === "" ? null : +inp.value;
+      else if(f === "material") r.material = inp.value === "" ? null : inp.value === "yes";
+      else if(f === "lateCounts") r.lateCounts = !!inp.checked;
       else r[f] = inp.value;
       r.kind = r.kind || "certified";
+      if(f === "kind") a36RenderGrid(); /* detail row appears / disappears */
       a36ValidateGrid();
     });
     inp.addEventListener("paste", function(ev){ a36HandlePaste(ev, inp); });
@@ -838,7 +1024,12 @@ function a36HandlePaste(ev, inp){
     if(cells[1]) r.aftap = parseFloat(cells[1].replace("%",""));
     if(cells[2]) r.certDate = cells[2].trim();
     if(cells[3]) r.source = cells[3].trim();
-    if(cells[4]) r.ipsRef = cells[4].trim();
+    if(cells.length >= 6){
+      /* 6 columns: kind is cells[4], IPS ref is cells[5]. */
+      var k = cells[4].trim().toLowerCase();
+      if(A36_KINDS.indexOf(k) >= 0) r.kind = k;
+      if(cells[5]) r.ipsRef = cells[5].trim();
+    } else if(cells[4]) r.ipsRef = cells[4].trim(); /* 5 columns: no kind. */
   });
   a36RenderGrid();
   a36ValidateGrid();
@@ -862,7 +1053,12 @@ function a36RenderPart1(){
 function a36RenderPart3(){
   var card = a36El("part3-card");
   if(!card) return;
-  var res = a36BuildPeriods(A36_STATE.history, A36_STATE.caseData.planYearStart || "01-01", A36_STATE.caseData.dopt, null);
+  var adoptionYear = null;
+  if(A36_STATE.caseData.adoptionDate){
+    var am = /^(\d{4})-/.exec(A36_STATE.caseData.adoptionDate);
+    if(am) adoptionYear = +am[1];
+  }
+  var res = a36BuildPeriods(A36_STATE.history, A36_STATE.caseData.planYearStart || "01-01", A36_STATE.caseData.dopt, adoptionYear);
   A36_STATE.periods = res.periods;
   var html = "";
   if(res.errors.length) html += '<div class="alert">' + res.errors.map(a36EscXml).join("<br>") + '</div>';
@@ -885,7 +1081,7 @@ function a36RenderPart3(){
 function a36RenderReview(){
   var card = a36El("review-card");
   if(!card) return;
-  var draft = a36DraftPart4(A36_STATE.answers, A36_STATE.periods, {});
+  var draft = a36DraftPart4(A36_STATE.answers, A36_STATE.periods, A36_STATE.facts || {});
   A36_STATE.draft = draft;
   var prelim = a36Preliminary(A36_STATE.answers);
   var html = '<p>Preliminary determination: <strong>' + (prelim.anyYes ? "Yes — continue to Part 2." : "No — no §436 limitation applied before DOPT.") + '</strong></p>';
@@ -946,6 +1142,55 @@ function a36ShowView(name){
   var mt = a36El("menu-toggle");
   if(mt) mt.setAttribute("aria-expanded", "false");
 }
+/* ---------- LLM JSON import ----------
+   The LLM JSON is a proposal: validate it against the schema rules,
+   show a summary, and load it only when the actuary approves. Loading
+   fills the editable forms — the steps themselves are the review. */
+function a36ValidateImport(obj){
+  var errors = [];
+  if(!obj || typeof obj !== "object" || Array.isArray(obj)) return { errors: ["JSON is not an object"], summary: null };
+  if(!obj.caseData) errors.push("caseData is missing");
+  else errors = errors.concat(a36ValidateCase(obj.caseData).errors);
+  if(!obj.history) errors.push("history is missing");
+  else errors = errors.concat(a36ValidateHistory(obj.history).errors);
+  if(!obj.answers) errors.push("answers is missing");
+  else ["b","c","d","e"].forEach(function(k){
+    if(["no","na","yes"].indexOf(obj.answers[k]) < 0) errors.push("answers." + k + " must be no, na, or yes");
+  });
+  if(obj.cba){
+    ["ratificationDate","effectiveDate","expirationDate"].forEach(function(k){
+      if(obj.cba[k] && !A36_DATE_RE.test(obj.cba[k])) errors.push("cba." + k + " must be YYYY-MM-DD");
+    });
+  }
+  if(obj.facts && obj.facts.f4022Max !== null && obj.facts.f4022Max !== undefined && isNaN(+obj.facts.f4022Max)) errors.push("facts.f4022Max must be a number");
+  if(errors.length) return { errors: errors, summary: null };
+  return { errors: [], summary: {
+    planName: obj.caseData.planName, caseNumber: obj.caseData.caseNumber,
+    dopt: obj.caseData.dopt, rows: obj.history.length,
+    answers: "b=" + obj.answers.b + ", c=" + obj.answers.c + ", d=" + obj.answers.d + ", e=" + obj.answers.e
+  } };
+}
+function a36LoadImport(obj){
+  A36_STATE.caseData = JSON.parse(JSON.stringify(obj.caseData));
+  A36_STATE.history = JSON.parse(JSON.stringify(obj.history));
+  A36_STATE.answers = JSON.parse(JSON.stringify(obj.answers));
+  if(obj.cba) A36_STATE.cba = JSON.parse(JSON.stringify(obj.cba));
+  if(obj.facts) A36_STATE.facts = JSON.parse(JSON.stringify(obj.facts));
+  A36_STATE.history.forEach(function(r){ r.kind = r.kind || "certified"; });
+  a36WriteCase(A36_STATE.caseData);
+  a36RenderGrid();
+  a36ValidateGrid();
+  a36RenderPart1();
+  a36ShowStep(1);
+}
+function a36DownloadText(name, text, type){
+  var blob = new Blob([text], { type: type || "text/plain" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 100);
+}
 function a36Init(){
   a36ApplyTheme(a36LoadTheme());
   var tt = a36El("theme-toggle");
@@ -965,6 +1210,46 @@ function a36Init(){
   });
   var h0 = (location.hash || "#436").slice(1);
   if(["436","welcome","help"].indexOf(h0) >= 0) a36ShowView(h0);
+  var dp = a36El("btn-download-prompt");
+  if(dp) dp.addEventListener("click", function(){
+    a36DownloadText("436-scraper-prompt.md", A36_SCRAPER_PROMPT, "text/markdown");
+  });
+  var impFile = a36El("import-file");
+  if(impFile) impFile.addEventListener("change", function(){
+    var f = impFile.files && impFile.files[0];
+    if(!f) return;
+    var rd = new FileReader();
+    rd.onload = function(){ var ta = a36El("import-json"); if(ta) ta.value = rd.result; };
+    rd.readAsText(f);
+  });
+  var impBox = a36El("import-result");
+  var impLoad = a36El("btn-load-import");
+  var impObj = null;
+  var vi = a36El("btn-validate-import");
+  if(vi) vi.addEventListener("click", function(){
+    var raw = (a36El("import-json") || {}).value || "";
+    impObj = null;
+    if(impLoad) impLoad.hidden = true;
+    var obj;
+    try { obj = JSON.parse(raw); }
+    catch(e){ if(impBox) impBox.innerHTML = '<div class="alert">Not valid JSON: ' + a36EscXml(e.message) + '</div>'; return; }
+    var res = a36ValidateImport(obj);
+    if(res.errors.length){
+      if(impBox) impBox.innerHTML = '<div class="alert">' + res.errors.map(a36EscXml).join("<br>") + '</div>';
+      return;
+    }
+    impObj = obj;
+    var s = res.summary;
+    if(impBox) impBox.innerHTML = '<p><strong>Valid.</strong> ' + a36EscXml(s.planName) + ' · Case ' + a36EscXml(s.caseNumber) + ' · DOPT ' + a36EscXml(s.dopt) + ' · ' + s.rows + ' AFTAP rows · ' + a36EscXml(s.answers) + '. Check the steps after loading — nothing is final until you download.</p>';
+    if(impLoad) impLoad.hidden = false;
+  });
+  if(impLoad) impLoad.addEventListener("click", function(){
+    if(!impObj) return;
+    a36LoadImport(impObj);
+    if(impBox) impBox.innerHTML = "";
+    var ta = a36El("import-json"); if(ta) ta.value = "";
+    impLoad.hidden = true;
+  });
   var addRow = a36El("btn-add-row");
   if(addRow) addRow.addEventListener("click", function(){
     A36_STATE.history.push({ planYear: null, aftap: null, certDate: "", source: "Certification", ipsRef: "", kind: "certified" });
@@ -1017,7 +1302,7 @@ function a36Init(){
   var dj = a36El("btn-download-json");
   if(dj) dj.addEventListener("click", function(){
     a36CollectDraft();
-    var data = { version: A36_VERSION, caseData: A36_STATE.caseData, history: A36_STATE.history, answers: A36_STATE.answers, draft: A36_STATE.draft, cba: A36_STATE.cba };
+    var data = { version: A36_VERSION, caseData: A36_STATE.caseData, history: A36_STATE.history, answers: A36_STATE.answers, draft: A36_STATE.draft, cba: A36_STATE.cba, facts: A36_STATE.facts || {} };
     a36Download("436_inputs_" + (A36_STATE.caseData.caseNumber || "case") + ".json", JSON.stringify(data, null, 2));
   });
   a36RenderGrid();
@@ -1032,6 +1317,7 @@ var A36 = {
   buildPeriods: a36BuildPeriods, thresholds: a36Thresholds, aftapAt: a36AftapAt,
   preliminary: a36Preliminary, cbaApplies: a36CbaApplies, draftPart4: a36DraftPart4,
   validateHistory: a36ValidateHistory, validateCase: a36ValidateCase,
+  validateImport: a36ValidateImport, loadImport: a36LoadImport,
   buildDocxBytes: a36BuildDocxBytes, buildDocumentXml: a36BuildDocumentXml,
   docxFilename: a36DocxFilename, fmtPct: a36FmtPct,
   DEMO_CASE: A36_DEMO_CASE, DEMO_HISTORY: A36_DEMO_HISTORY, DEMO_ANSWERS: A36_DEMO_ANSWERS, DEMO_CBA: A36_DEMO_CBA,

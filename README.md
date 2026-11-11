@@ -1,13 +1,13 @@
 # 436 Generator
 
-![Tests: 146 passing](https://img.shields.io/badge/tests-146%20passing-brightgreen)
-![Unit tests: 85 passing](https://img.shields.io/badge/unit%20tests-85%20passing-brightgreen)
-![Browser tests: 61 passing](https://img.shields.io/badge/browser%20tests-61%20passing-brightgreen)
+![Tests: 165 passing](https://img.shields.io/badge/tests-165%20passing-brightgreen)
+![Unit tests: 100 passing](https://img.shields.io/badge/unit%20tests-100%20passing-brightgreen)
+![Browser tests: 65 passing](https://img.shields.io/badge/browser%20tests-65%20passing-brightgreen)
 ![DOCX checks: passing](https://img.shields.io/badge/docx%20checks-passing-brightgreen)
 ![Network calls: 0](https://img.shields.io/badge/network%20calls-0-brightgreen)
-![Version: v0.2.0](https://img.shields.io/badge/version-v0.2.0-blue)
+![Version: v0.2.1](https://img.shields.io/badge/version-v0.2.1-blue)
 
-Badges show grades measured on v0.2.0. Update badges when tests change.
+Badges show grades measured on v0.2.1. Update badges when tests change.
 
 ## Purpose
 
@@ -96,6 +96,28 @@ PBGC logo on the blue header in both themes.
 v0.2.0. Template: 436_Evaluation_Template_v0.2.0.docx (blank,
 2026-07-27). No data from the partially filled Nov 2025 file is used
 anywhere in this repo.
+
+### v0.2.1 — what changed
+
+- WRERA §203 encoded (verified against the enrolled bill and the
+  JCT explanation): for the single plan year beginning Oct 1,
+  2008–Sep 30, 2009, the (e) accrual-freeze test uses the greater of
+  the current-year and prior-year AFTAP — the freeze applies only if
+  both are below 60%. The PRA 2010 lookback is encoded with it: for
+  plan years beginning Oct 1, 2008–Sep 30, 2010, the (e) test uses
+  the greater of the current-year AFTAP and the AFTAP for the plan
+  year beginning Oct 1, 2007–Sep 30, 2008. The Part 3 AFTAP values
+  are unchanged; only the (e) determination changes, and the Limits
+  column names the rule when it changes the outcome. (b), (c), (d)
+  always use the period's own AFTAP.
+- ERISA 29 USC §1056(g) read in full and verified as a verbatim
+  mirror of IRC §436 for every rule the app encodes — no change
+  needed. The 92/94/96% fully-funded transition is a rule about how
+  the enrolled actuary computes a certified AFTAP, not a limitation
+  threshold, so the app takes the certified AFTAP as given; a note
+  in Step 2 says so. The (d)(2) bankruptcy threshold stays 100%.
+- Tests: 165 passing (100 unit, 65 browser). Demo .docx verified
+  (14 periods, unchanged).
 
 ### v0.2.0 — what changed
 

@@ -173,7 +173,7 @@ footer{margin:2rem 0 1rem;border-top:1px solid var(--gray-2);padding-top:1rem}
     </div>
     <div id="step-2" class="step" hidden>
       <h2>Step 2 — AFTAP history</h2>
-      <p>Type the certification history in the grid, or paste it from Excel. One row per plan year. The app computes the Part 3 table from this grid.</p>
+      <p>Type the certification history in the grid, or paste it from Excel. One row per plan year. The app computes the Part 3 table from this grid. Enter the AFTAP the enrolled actuary certified — the app takes it as given and never computes one. For 2008–2010 the fully-funded rule phased in (92%, 94%, 96%) for whether funding balances reduce assets in that computation.</p>
       <div class="card" id="import-card">
         <h3>From an LLM</h3>
         <p>Download the scraper prompt, feed it with the plan documents to your LLM, and paste the JSON back here. The app validates it. You review it. Only approved JSON loads.</p>
@@ -183,7 +183,7 @@ footer{margin:2rem 0 1rem;border-top:1px solid var(--gray-2);padding-top:1rem}
           <input id="import-file" type="file" accept=".json,application/json">
         </p>
         <label for="import-json">Paste the LLM JSON here</label>
-        <textarea id="import-json" rows="6" spellcheck="false" placeholder='{"version": "0.2.0", "caseData": {...}, "history": [...], "answers": {...}}'></textarea>
+        <textarea id="import-json" rows="6" spellcheck="false" placeholder='{"version": "0.2.1", "caseData": {...}, "history": [...], "answers": {...}}'></textarea>
         <p>
           <button class="secondary" id="btn-validate-import" type="button">Validate JSON</button>
           <button class="primary" id="btn-load-import" type="button" hidden>Load this JSON</button>
@@ -267,17 +267,17 @@ footer{margin:2rem 0 1rem;border-top:1px solid var(--gray-2);padding-top:1rem}
   </section>
 </main>
 <footer>
-  <p class="small">436 Generator v0.1.0 · PBGC Design System v1.1.0 DRAFT (not approved) · Single HTML file — open it from disk, no server, no data leaves this page.</p>
+  <p class="small">436 Generator v0.2.1 · PBGC Design System v1.1.0 DRAFT (not approved) · Single HTML file — open it from disk, no server, no data leaves this page.</p>
 </footer>
 
 <script>
 "use strict";
-/* 436 Generator v0.1.0 — Section 436 limitations analysis.
+/* 436 Generator v0.2.1 — Section 436 limitations analysis.
    Single HTML file. No fetch, no external URLs, no data leaves the page.
    The app takes certified/stated AFTAPs as inputs and computes presumed
    AFTAPs, periods, thresholds, and caps. It never certifies an AFTAP.
    Law: IRC 436 / ERISA 206(g) / Reg 1.436-1. See docs for the reference. */
-var A36_VERSION = "0.2.0";
+var A36_VERSION = "0.2.1";
 var A36_THRESH_B = 60, A36_THRESH_C = 80, A36_THRESH_E = 60, A36_THRESH_D = 60, A36_THRESH_BANKRUPTCY = 100;
 var A36_START_YEAR = 2008;
 
@@ -351,6 +351,17 @@ function a36MonthStart(year, mmdd, monthIndex){
      change applies prospectively from the later certification date.
      Materiality is stated by the actuary (or mapped to the nine
      deemed-immaterial items) — the app cannot infer it from numbers.
+   - (e) only: WRERA §203 — for the single plan year beginning
+     Oct 1, 2008–Sep 30, 2009, the (e) accrual-freeze test uses the
+     greater of the current-year and prior-year AFTAP (freeze only if
+     both are below 60%). PRA 2010 §203 lookback — for plan years
+     beginning Oct 1, 2008–Oct 1, 2010, the (e) test uses the greater
+     of the current-year AFTAP and the AFTAP for the plan year
+     beginning Oct 1, 2007–Oct 1, 2008. In the WRERA year both apply:
+     the greater of the three. The Part 3 table's AFTAP values are
+     unaffected; only the (e) determination changes. Each period
+     carries eAftapPct (the AFTAP used for (e)) and eNote (set only
+     when the substitution changes the (e) outcome).
    Boundaries: plan-year starts, certification dates, April 1,
    October 1, DOPT. */
 function a36BuildPeriods(certHistory, planYearStart, doptISO, adoptionYear){
@@ -369,6 +380,24 @@ function a36BuildPeriods(certHistory, planYearStart, doptISO, adoptionYear){
   var errors = [];
   var rowForYear = {};
   rows.forEach(function(r){ if(!rowForYear[r.planYear]) rowForYear[r.planYear] = r; });
+
+  /* WRERA §203 year and PRA 2010 lookback base year, from the plan-year
+     start (month-day). WRERA year: the plan year starting Oct 1,
+     2008–Sep 30, 2009 (enrolled bill text). Lookback base year: the
+     plan year starting Oct 1, 2007–Sep 30, 2008. The lookback applies
+     to plan years starting Oct 1, 2008–Sep 30, 2010. Endpoint
+     assumption: the PRA windows are read as "after Sep 30 / before
+     Oct 1", matching the WRERA window pattern. */
+  function yearStartsIn(y, loISO, hiISO){
+    var s = a36YearStart(y, planYearStart);
+    return a36Cmp(s, a36ParseISO(loISO)) >= 0 && a36Cmp(s, a36ParseISO(hiISO)) <= 0;
+  }
+  var wreraYear = null, baseYear = null;
+  for(var wy = 2007; wy <= 2010; wy++){
+    if(yearStartsIn(wy, "2008-10-01", "2009-09-30")) wreraYear = wy;
+    if(yearStartsIn(wy, "2007-10-01", "2008-09-30")) baseYear = wy;
+  }
+  var endByYear = {}; /* planYear -> {aftapPct, display} of its last segment */
 
   /* A row's certification events for its own plan year, in date order.
      Each event: {date (Date), aftap (number), type, range (bool)}.
@@ -514,6 +543,26 @@ function a36BuildPeriods(certHistory, planYearStart, doptISO, adoptionYear){
     }
     changes.sort(function(a,b){ return (a.date.getTime() - b.date.getTime()) || (a.prio - b.prio); });
 
+    /* --- (e) effective AFTAP: WRERA §203 + PRA 2010 lookback --- */
+    var inLookback = yearStartsIn(y, "2008-10-01", "2010-09-30");
+    var baseAftap = null;
+    if(inLookback && baseYear !== null){
+      if(endByYear[baseYear]) baseAftap = endByYear[baseYear].aftapPct;
+      else if(rowForYear[baseYear] && rowForYear[baseYear].aftap !== null && rowForYear[baseYear].aftap !== undefined && rowForYear[baseYear].aftap !== "") baseAftap = +rowForYear[baseYear].aftap;
+    }
+    function eFor(aftapPct, display){
+      var cur = (display === "< 60%" || display === "N/A") ? null : aftapPct;
+      var eff = cur, note = null;
+      if(y === wreraYear && bandValue !== null && bandValue !== undefined){
+        if(eff === null || bandValue > eff){ eff = bandValue; note = "WRERA §203"; }
+      }
+      if(inLookback && baseAftap !== null && baseAftap !== undefined){
+        if(eff === null || baseAftap > eff){ eff = baseAftap; note = note ? note + " + PRA lookback" : "PRA lookback"; }
+      }
+      var changesOutcome = (cur === null || cur < A36_THRESH_E) && eff !== null && eff >= A36_THRESH_E;
+      return { eAftapPct: eff, eNote: changesOutcome ? note + ": (e) uses " + a36FmtPct(eff) : null };
+    }
+
     /* Cut segments at the changes, clipped to this plan year. */
     for(var i = 0; i < changes.length; i++){
       var segStart = changes[i].date;
@@ -525,9 +574,11 @@ function a36BuildPeriods(certHistory, planYearStart, doptISO, adoptionYear){
       if(last && last.planYear === y && last.aftapDisplay === changes[i].display && last.basis === changes[i].basis){
         last.endDate = a36FmtISO(segEnd);
       } else {
-        periods.push({ period: periods.length+1, planYear: y, aftapPct: changes[i].aftapPct, aftapDisplay: changes[i].display, basis: changes[i].basis, startDate: a36FmtISO(segStart), endDate: a36FmtISO(segEnd) });
+        var ef = eFor(changes[i].aftapPct, changes[i].display);
+        periods.push({ period: periods.length+1, planYear: y, aftapPct: changes[i].aftapPct, aftapDisplay: changes[i].display, basis: changes[i].basis, startDate: a36FmtISO(segStart), endDate: a36FmtISO(segEnd), eAftapPct: ef.eAftapPct, eNote: ef.eNote });
       }
     }
+    if(periods.length) endByYear[y] = { aftapPct: periods[periods.length-1].aftapPct, display: periods[periods.length-1].aftapDisplay };
     prevLast = periods.length ? periods[periods.length-1] : null;
   }
   return { errors: errors, periods: periods };
@@ -543,10 +594,18 @@ function a36FmtPct(v){
 function a36Thresholds(period){
   /* Returns which limitations apply in this period. aftapPct null with
      display "< 60%" means conclusively below 60%. "N/A" means no AFTAP
-     to apply (2008 transition — no limitation before certification). */
+     to apply (2008 transition — no limitation before certification).
+     (e) alone uses eAftapPct when present (WRERA §203 / PRA 2010
+     lookback substitution); (b), (c), (d) and the bankruptcy test
+     always use the period's own AFTAP. */
   var out = { b: false, c: false, d: false, dCap: false, e: false, bankruptcy: false, na: false };
   if(period.aftapDisplay === "N/A"){ out.na = true; return out; }
-  if(period.aftapDisplay === "< 60%"){ out.b = true; out.c = true; out.d = true; out.e = true; out.bankruptcy = true; return out; }
+  var eA = (period.eAftapPct !== null && period.eAftapPct !== undefined && !isNaN(+period.eAftapPct)) ? +period.eAftapPct : null;
+  if(period.aftapDisplay === "< 60%"){
+    out.b = true; out.c = true; out.d = true; out.bankruptcy = true;
+    out.e = !(eA !== null && eA >= A36_THRESH_E);
+    return out;
+  }
   var a = period.aftapPct;
   if(a === null || a === undefined || isNaN(+a)){ out.na = true; return out; }
   a = +a;
@@ -554,7 +613,7 @@ function a36Thresholds(period){
   out.c = a < A36_THRESH_C;
   out.d = a < A36_THRESH_D;
   out.dCap = a >= A36_THRESH_D && a < A36_THRESH_C;
-  out.e = a < A36_THRESH_E;
+  out.e = eA !== null ? eA < A36_THRESH_E : a < A36_THRESH_E;
   out.bankruptcy = a < A36_THRESH_BANKRUPTCY;
   return out;
 }
@@ -632,7 +691,12 @@ function a36DraftPart4(answers, periods, facts){
   }
   if(answers.e === "yes"){
     var restored = facts.accrualsRestored === true ? "Accruals were restored." : facts.accrualsRestored === false ? "Accruals were not restored." : "Confirm whether accruals were restored.";
-    out.e = "Section 436(e): benefits accrued in the period. " + restored + " While the AFTAP is below 60%, benefit accruals cease as of the valuation date. [Actuary: add the freeze date, the AFTAP at that date, and the conclusion.]";
+    var eNote = "";
+    if(facts.accrualFreezeDate){
+      var ep = a36AftapAt(periods, facts.accrualFreezeDate);
+      if(ep && ep.eNote) eNote = " " + ep.eNote + ", so accruals did not cease in that period.";
+    }
+    out.e = "Section 436(e): benefits accrued in the period. " + restored + " While the AFTAP is below 60%, benefit accruals cease as of the valuation date." + eNote + " [Actuary: add the freeze date, the AFTAP at that date, and the conclusion.]";
   } else {
     out.e = "Section 436(e): benefits did not accrue in the period. The plan is not subject to a 436(e) limitation.";
   }
@@ -718,7 +782,7 @@ var A36_DEMO_ANSWERS = { b: "no", c: "no", d: "yes", e: "no" };
 var A36_DEMO_CBA = { ratificationDate: "", effectiveDate: "", expirationDate: "", ipsRef: "" };
 
 /* PROMPT-START */
-var A36_SCRAPER_PROMPT = "# 436 \u2014 Section 436 Limitations Scraper Prompt\n\nUse this prompt with an LLM of your choice. Attach the plan documents\n**and** the other associated documents \u2014 plan document, amendments,\nrestatements, SPD, trust agreement, actuarial valuation reports (AVR),\nAFTAP certifications, Form 5500 Schedule SB, TWG memo, trusteeship\nagreement, prior administrator data, collective bargaining agreement,\nanything about the plan \u2014 together with this prompt. The LLM must return\n**only** the JSON payload described below. That JSON is a *proposal*: it\nis fed back into the 436 Generator app, validated against\n`schema/436.schema.json`, reviewed by a human, and only approved JSON is\nused to write the \u00a7436 Evaluation Word document. The LLM never fills the\nWord document and never certifies an AFTAP. PBGC will not calculate or\ncertify a plan's AFTAP.\n\n## Your task\n\nYou are gathering the inputs for a \u00a7436 Evaluation for a terminated\nsingle-employer defined-benefit pension plan. Find:\n\n1. **Case header.** Plan name, EIN/PIN, PBGC case number, DOPT, DOTR,\n   BPD, DOBF (plan date of benefit freeze), FD-PY, plan year start\n   (month-day), plan adoption date.\n2. **AFTAP history.** For each plan year from the later of the plan\n   adoption date and PY2007: the certified AFTAP %, the signed\n   certification date, the source, and the Image Viewer document number.\n   Where no certification exists, give the AFTAP stated in the AVR or\n   Form 5500 Schedule SB and say so. Flag range certifications (give\n   the range), late certifications (certified on/after Oct 1 of that\n   plan year), and recertifications (original value and date, amended\n   value and date, whether the change was material).\n3. **Part 1 answers.** For each of (b), (c), (d), (e), answer No, N/A,\n   or Yes, and give the facts behind the answer:\n   - (b) Did the plan provide a UCEB (early unreduced benefits or\n     temporary supplements due to a plant shutdown) for an event on or\n     after FD-PY2008 and before DOPT? Describe the UCEB, the group,\n     the event dates, and whether the plan paid it.\n   - (c) Did amendments increasing benefit liabilities have an adoption\n     or effective date on or after the later of the plan's adoption date\n     and FD-PY2008 and before DOPT? Give each amendment's dates,\n     description, and whether it took effect. Note the N/A reasons:\n     plan in effect less than five full plan years; increase only for\n     future periods (on or after DOPT); mandatory vesting increase;\n     only \u00a7401(a)(17) compensation limits.\n   - (d) Did the plan provide prohibited payments (non-de minimis lump\n     sums, period-certain benefits, non-life-annuity forms) with an ASD\n     or BCD on or after the later of the plan's adoption date and\n     FD-PY2008? List each payment and its date. Note if benefits did\n     not accrue on or after 09/01/2005 (state the date accruals ceased).\n   - (e) Did benefits accrue for any participant on or after the later\n     of the plan's adoption date and FD-PY2008? Give the accrual freeze\n     date and whether accruals were restored.\n4. **CBA.** Was the plan maintained under a collective bargaining\n   agreement ratified before 01/01/2008 and in effect on 01/01/2008?\n   Give the ratification, effective, and expiration dates and the IPS\n   document number.\n5. **Other facts.** Sponsor bankruptcy status and dates (for \u00a7436(d)(2)).\n   Whether the plan was a fully-insured \u00a7412(e)(3) plan and, if so, the\n   date it converted to a traditional defined benefit plan. The PBGC\n   maximum guarantee amount for any participant with a prohibited\n   payment (for the (d)(3) cap), if known.\n\n## Rules\n\n- **Summarise, do not copy verbatim \u2014 ASD STE 100 minimal style.**\n  Every value must be the **smallest string that conveys the meaning**.\n  Keep ages, service years, percentages, dollar amounts, and dates\n  **exact**. If stripping verbiage would lose meaning (a condition, an\n  exception, a date), keep the longer form.\n- **Dates are ISO format `YYYY-MM-DD`. Case number is text, with\n  leading zeros preserved (never a number).**\n- **AFTAP % is a number 0\u2013100.** A range certification goes in `kind`\n  \"range\" with the low bound as `aftap`; if a specific certification\n  later superseded the range, give its value and date in\n  `specificAftap` and `specificCertDate`. A late certification goes in\n  `kind` \"late\"; say whether it took into account UCEBs and amendments\n  that became effective during the plan year before the certification\n  (`lateCounts`: true/false). A recertification goes in `kind`\n  \"recertified\" with the original value and date in `priorAftap` and\n  `priorCertDate`, the amended value in `aftap` and `certDate`, and\n  whether the change was material in `material` (true/false).\n- **Citation for every AFTAP row**: the document and the Image Viewer\n  document number where the certification or stated AFTAP appears. No\n  citation, no present answer.\n- **Do not guess.** A missing answer is a correct answer. A guessed\n  value is an error. If a certification cannot be found, say so and\n  give the AVR or Schedule SB value instead, with the source named.\n- **Never return a full masked value** (no full SSN, no full account\n  number). This evaluation lists plan-level facts and AFTAPs, not\n  participant values.\n- **You do not certify an AFTAP.** You report the AFTAPs the enrolled\n  actuary certified or the AVR / Schedule SB states, with dates and\n  sources.\n\n## Output format\n\nReturn **only** valid JSON, no markdown fences, no commentary, no\nexplanation. The JSON must have exactly these top-level keys:\n\n```json\n{\n  \"version\": \"0.2.0\",\n  \"caseData\": {\n    \"planName\": \"string\",\n    \"einPin\": \"string or null\",\n    \"caseNumber\": \"string (text, leading zeros preserved)\",\n    \"dopt\": \"YYYY-MM-DD\",\n    \"dotr\": \"YYYY-MM-DD or null\",\n    \"bpd\": \"YYYY-MM-DD or null\",\n    \"dobf\": \"YYYY-MM-DD or null\",\n    \"fdPy\": \"MM/DD or null\",\n    \"planYearStart\": \"MM-DD or null\",\n    \"adoptionDate\": \"YYYY-MM-DD or null\",\n    \"toName\": \"string or null\",\n    \"toSection\": \"string or null\",\n    \"fromName\": \"string or null\",\n    \"fromSection\": \"string or null\",\n    \"memoDate\": \"YYYY-MM-DD or null\",\n    \"subject\": \"\u00a7436 Evaluation\"\n  },\n  \"history\": [\n    {\n      \"planYear\": 2008,\n      \"aftap\": 72.5,\n      \"certDate\": \"YYYY-MM-DD or null\",\n      \"source\": \"Certification | AVR | 5500 SB\",\n      \"ipsRef\": \"string or null\",\n      \"kind\": \"certified | range | late | recertified or null\",\n      \"priorAftap\": \"number or null (recertified only)\",\n      \"priorCertDate\": \"YYYY-MM-DD or null (recertified only)\",\n      \"material\": \"true | false | null (recertified only)\",\n      \"specificAftap\": \"number or null (range only)\",\n      \"specificCertDate\": \"YYYY-MM-DD or null (range only)\",\n      \"lateCounts\": \"true | false | null (late only)\"\n    }\n  ],\n  \"answers\": { \"b\": \"no | na | yes\", \"c\": \"no | na | yes\", \"d\": \"no | na | yes\", \"e\": \"no | na | yes\" },\n  \"cba\": {\n    \"ratificationDate\": \"YYYY-MM-DD or null\",\n    \"effectiveDate\": \"YYYY-MM-DD or null\",\n    \"expirationDate\": \"YYYY-MM-DD or null\",\n    \"ipsRef\": \"string or null\"\n  },\n  \"facts\": {\n    \"ucebPaid\": true | false | null,\n    \"accrualsRestored\": true | false | null,\n    \"accrualFreezeDate\": \"YYYY-MM-DD or null\",\n    \"f4022Max\": \"number or null\",\n    \"amendmentDates\": [{ \"date\": \"YYYY-MM-DD\", \"description\": \"string\" }],\n    \"paymentDates\": [{ \"date\": \"YYYY-MM-DD\", \"description\": \"string\" }]\n  }\n}\n```\n\n## Workflow reminder (for the human, not the LLM)\n\n1. Download this prompt from the 436 Generator app.\n2. Feed the plan documents and associated documents + this prompt to\n   your LLM (Microsoft Copilot in the office, any LLM at home).\n3. Take the JSON the LLM returns and upload / paste it back into the\n   436 Generator app.\n4. The app validates the JSON against the schema, flags missing /\n   uncited items, and you review and approve each one.\n5. Only approved JSON writes the filled \u00a7436 Evaluation Word document.\n   The app computes the Part 3 AFTAP table and drafts the Part 4\n   conclusions from the approved data. You review the draft before\n   download.\n";
+var A36_SCRAPER_PROMPT = "# 436 \u2014 Section 436 Limitations Scraper Prompt\n\nUse this prompt with an LLM of your choice. Attach the plan documents\n**and** the other associated documents \u2014 plan document, amendments,\nrestatements, SPD, trust agreement, actuarial valuation reports (AVR),\nAFTAP certifications, Form 5500 Schedule SB, TWG memo, trusteeship\nagreement, prior administrator data, collective bargaining agreement,\nanything about the plan \u2014 together with this prompt. The LLM must return\n**only** the JSON payload described below. That JSON is a *proposal*: it\nis fed back into the 436 Generator app, validated against\n`schema/436.schema.json`, reviewed by a human, and only approved JSON is\nused to write the \u00a7436 Evaluation Word document. The LLM never fills the\nWord document and never certifies an AFTAP. PBGC will not calculate or\ncertify a plan's AFTAP.\n\n## Your task\n\nYou are gathering the inputs for a \u00a7436 Evaluation for a terminated\nsingle-employer defined-benefit pension plan. Find:\n\n1. **Case header.** Plan name, EIN/PIN, PBGC case number, DOPT, DOTR,\n   BPD, DOBF (plan date of benefit freeze), FD-PY, plan year start\n   (month-day), plan adoption date.\n2. **AFTAP history.** For each plan year from the later of the plan\n   adoption date and PY2007: the certified AFTAP %, the signed\n   certification date, the source, and the Image Viewer document number.\n   Where no certification exists, give the AFTAP stated in the AVR or\n   Form 5500 Schedule SB and say so. Flag range certifications (give\n   the range), late certifications (certified on/after Oct 1 of that\n   plan year), and recertifications (original value and date, amended\n   value and date, whether the change was material).\n3. **Part 1 answers.** For each of (b), (c), (d), (e), answer No, N/A,\n   or Yes, and give the facts behind the answer:\n   - (b) Did the plan provide a UCEB (early unreduced benefits or\n     temporary supplements due to a plant shutdown) for an event on or\n     after FD-PY2008 and before DOPT? Describe the UCEB, the group,\n     the event dates, and whether the plan paid it.\n   - (c) Did amendments increasing benefit liabilities have an adoption\n     or effective date on or after the later of the plan's adoption date\n     and FD-PY2008 and before DOPT? Give each amendment's dates,\n     description, and whether it took effect. Note the N/A reasons:\n     plan in effect less than five full plan years; increase only for\n     future periods (on or after DOPT); mandatory vesting increase;\n     only \u00a7401(a)(17) compensation limits.\n   - (d) Did the plan provide prohibited payments (non-de minimis lump\n     sums, period-certain benefits, non-life-annuity forms) with an ASD\n     or BCD on or after the later of the plan's adoption date and\n     FD-PY2008? List each payment and its date. Note if benefits did\n     not accrue on or after 09/01/2005 (state the date accruals ceased).\n   - (e) Did benefits accrue for any participant on or after the later\n     of the plan's adoption date and FD-PY2008? Give the accrual freeze\n     date and whether accruals were restored.\n4. **CBA.** Was the plan maintained under a collective bargaining\n   agreement ratified before 01/01/2008 and in effect on 01/01/2008?\n   Give the ratification, effective, and expiration dates and the IPS\n   document number.\n5. **Other facts.** Sponsor bankruptcy status and dates (for \u00a7436(d)(2)).\n   Whether the plan was a fully-insured \u00a7412(e)(3) plan and, if so, the\n   date it converted to a traditional defined benefit plan. The PBGC\n   maximum guarantee amount for any participant with a prohibited\n   payment (for the (d)(3) cap), if known.\n\n## Rules\n\n- **Summarise, do not copy verbatim \u2014 ASD STE 100 minimal style.**\n  Every value must be the **smallest string that conveys the meaning**.\n  Keep ages, service years, percentages, dollar amounts, and dates\n  **exact**. If stripping verbiage would lose meaning (a condition, an\n  exception, a date), keep the longer form.\n- **Dates are ISO format `YYYY-MM-DD`. Case number is text, with\n  leading zeros preserved (never a number).**\n- **AFTAP % is a number 0\u2013100.** A range certification goes in `kind`\n  \"range\" with the low bound as `aftap`; if a specific certification\n  later superseded the range, give its value and date in\n  `specificAftap` and `specificCertDate`. A late certification goes in\n  `kind` \"late\"; say whether it took into account UCEBs and amendments\n  that became effective during the plan year before the certification\n  (`lateCounts`: true/false). A recertification goes in `kind`\n  \"recertified\" with the original value and date in `priorAftap` and\n  `priorCertDate`, the amended value in `aftap` and `certDate`, and\n  whether the change was material in `material` (true/false).\n- **Citation for every AFTAP row**: the document and the Image Viewer\n  document number where the certification or stated AFTAP appears. No\n  citation, no present answer.\n- **Do not guess.** A missing answer is a correct answer. A guessed\n  value is an error. If a certification cannot be found, say so and\n  give the AVR or Schedule SB value instead, with the source named.\n- **Never return a full masked value** (no full SSN, no full account\n  number). This evaluation lists plan-level facts and AFTAPs, not\n  participant values.\n- **You do not certify an AFTAP.** You report the AFTAPs the enrolled\n  actuary certified or the AVR / Schedule SB states, with dates and\n  sources.\n\n## Output format\n\nReturn **only** valid JSON, no markdown fences, no commentary, no\nexplanation. The JSON must have exactly these top-level keys:\n\n```json\n{\n  \"version\": \"0.2.1\",\n  \"caseData\": {\n    \"planName\": \"string\",\n    \"einPin\": \"string or null\",\n    \"caseNumber\": \"string (text, leading zeros preserved)\",\n    \"dopt\": \"YYYY-MM-DD\",\n    \"dotr\": \"YYYY-MM-DD or null\",\n    \"bpd\": \"YYYY-MM-DD or null\",\n    \"dobf\": \"YYYY-MM-DD or null\",\n    \"fdPy\": \"MM/DD or null\",\n    \"planYearStart\": \"MM-DD or null\",\n    \"adoptionDate\": \"YYYY-MM-DD or null\",\n    \"toName\": \"string or null\",\n    \"toSection\": \"string or null\",\n    \"fromName\": \"string or null\",\n    \"fromSection\": \"string or null\",\n    \"memoDate\": \"YYYY-MM-DD or null\",\n    \"subject\": \"\u00a7436 Evaluation\"\n  },\n  \"history\": [\n    {\n      \"planYear\": 2008,\n      \"aftap\": 72.5,\n      \"certDate\": \"YYYY-MM-DD or null\",\n      \"source\": \"Certification | AVR | 5500 SB\",\n      \"ipsRef\": \"string or null\",\n      \"kind\": \"certified | range | late | recertified or null\",\n      \"priorAftap\": \"number or null (recertified only)\",\n      \"priorCertDate\": \"YYYY-MM-DD or null (recertified only)\",\n      \"material\": \"true | false | null (recertified only)\",\n      \"specificAftap\": \"number or null (range only)\",\n      \"specificCertDate\": \"YYYY-MM-DD or null (range only)\",\n      \"lateCounts\": \"true | false | null (late only)\"\n    }\n  ],\n  \"answers\": { \"b\": \"no | na | yes\", \"c\": \"no | na | yes\", \"d\": \"no | na | yes\", \"e\": \"no | na | yes\" },\n  \"cba\": {\n    \"ratificationDate\": \"YYYY-MM-DD or null\",\n    \"effectiveDate\": \"YYYY-MM-DD or null\",\n    \"expirationDate\": \"YYYY-MM-DD or null\",\n    \"ipsRef\": \"string or null\"\n  },\n  \"facts\": {\n    \"ucebPaid\": true | false | null,\n    \"accrualsRestored\": true | false | null,\n    \"accrualFreezeDate\": \"YYYY-MM-DD or null\",\n    \"f4022Max\": \"number or null\",\n    \"amendmentDates\": [{ \"date\": \"YYYY-MM-DD\", \"description\": \"string\" }],\n    \"paymentDates\": [{ \"date\": \"YYYY-MM-DD\", \"description\": \"string\" }]\n  }\n}\n```\n\n## Workflow reminder (for the human, not the LLM)\n\n1. Download this prompt from the 436 Generator app.\n2. Feed the plan documents and associated documents + this prompt to\n   your LLM (Microsoft Copilot in the office, any LLM at home).\n3. Take the JSON the LLM returns and upload / paste it back into the\n   436 Generator app.\n4. The app validates the JSON against the schema, flags missing /\n   uncited items, and you review and approve each one.\n5. Only approved JSON writes the filled \u00a7436 Evaluation Word document.\n   The app computes the Part 3 AFTAP table and drafts the Part 4\n   conclusions from the approved data. You review the draft before\n   download.\n";
 /* PROMPT-END */
 
 /* ---------- .docx writer (minimal OOXML, built from scratch) ---------- */
@@ -1072,7 +1136,7 @@ function a36RenderPart3(){
       else {
         if(t.b) limits.push("b"); if(t.c) limits.push("c"); if(t.d) limits.push("d"); if(t.dCap) limits.push("d-cap"); if(t.e) limits.push("e");
       }
-      html += '<tr><td>' + p.period + '</td><td>' + p.planYear + '</td><td>' + a36EscXml(p.aftapDisplay) + '</td><td>' + p.basis + '</td><td>' + a36FmtMDY(a36ParseISO(p.startDate)) + ' – ' + a36FmtMDY(a36ParseISO(p.endDate)) + '</td><td>' + (limits.length ? limits.join(", ") : "none") + '</td></tr>';
+      html += '<tr><td>' + p.period + '</td><td>' + p.planYear + '</td><td>' + a36EscXml(p.aftapDisplay) + '</td><td>' + p.basis + '</td><td>' + a36FmtMDY(a36ParseISO(p.startDate)) + ' – ' + a36FmtMDY(a36ParseISO(p.endDate)) + '</td><td>' + (limits.length ? limits.join(", ") : "none") + (p.eNote ? ' <span class="small">' + a36EscXml(p.eNote) + '</span>' : '') + '</td></tr>';
     });
     html += '</tbody></table>';
   }

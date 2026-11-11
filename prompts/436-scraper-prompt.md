@@ -99,7 +99,7 @@ explanation. The JSON must have exactly these top-level keys:
 
 ```json
 {
-  "version": "0.2.0",
+  "version": "0.2.1",
   "caseData": {
     "planName": "string",
     "einPin": "string or null",

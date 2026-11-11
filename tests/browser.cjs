@@ -190,6 +190,30 @@ setTimeout(() => {
     check('import: bad answer shows an error', idoc.getElementById('import-result').textContent.indexOf('answers.d') >= 0);
     check('import: nothing loaded on bad schema', idoc.getElementById('f-plan-name').value === 'Imported Plan');
 
+    // ---- Part 5b: WRERA (e) in the Step 4 Limits column ----
+    idoc.getElementById('import-json').value = JSON.stringify({
+      version: '0.2.0',
+      caseData: { planName: 'WRERA Plan', caseNumber: '55667788', dopt: '2009-12-31' },
+      history: [
+        { planYear: 2008, aftap: 72.5, certDate: '2008-02-01', source: 'Certification', kind: 'certified' },
+        { planYear: 2009, aftap: 55, certDate: '2009-02-01', source: 'Certification', kind: 'certified' }
+      ],
+      answers: { b: 'no', c: 'no', d: 'no', e: 'no' },
+      cba: {}
+    });
+    idoc.getElementById('btn-validate-import').click();
+    idoc.getElementById('btn-load-import').click();
+    check('WRERA: case loaded', idoc.getElementById('f-plan-name').value === 'WRERA Plan');
+    idoc.getElementById('btn-to-step2').click();
+    idoc.getElementById('btn-to-step3').click();
+    idoc.getElementById('btn-to-step4').click();
+    const wrows = Array.from(idoc.querySelectorAll('#part3-card table tbody tr'));
+    const wrow55 = wrows.find((tr) => tr.textContent.indexOf('2009') >= 0 && tr.textContent.indexOf('55%') >= 0);
+    check('WRERA: 2009 55% row exists in Step 4', !!wrow55);
+    const wlimits = wrow55 ? wrow55.querySelectorAll('td')[5].textContent : '';
+    check('WRERA: Limits cell lists b, c, d only', wlimits.indexOf('b, c, d') === 0 && wlimits.indexOf(', e') < 0);
+    check('WRERA: Limits cell names the rule', wlimits.indexOf('WRERA') >= 0);
+
     // ---- Part 6: grid kind column, detail rows, paste ----
     const gdoc = grid.dom.window.document;
     const gmainRows = () => Array.from(gdoc.querySelectorAll('#aftap-grid-body tr')).filter((tr) => tr.querySelector('input[data-f="planYear"]'));

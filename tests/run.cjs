@@ -191,12 +191,51 @@ const recertImmat = A36.buildPeriods([
 check("recert immaterial: original 85% governs Feb–Aug", recertImmat.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "85%" && p.startDate === "2010-02-01" && p.endDate === "2010-08-31"));
 check("recert immaterial: amended 70% governs from Sep 1", recertImmat.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "70%" && p.startDate === "2010-09-01"));
 
+/* --- 3f. WRERA §203 + PRA 2010 lookback (the (e) test only) ---
+   WRERA year (calendar plan: 2009): the (e) test uses max(current,
+   prior-year AFTAP) — freeze only if BOTH are below 60%. PRA lookback
+   (calendar plan: 2009–2010): the (e) test uses max(current, 2008
+   AFTAP). (b), (c), (d) always use the period's own AFTAP. */
+const wrera = A36.buildPeriods([
+  { planYear: 2008, aftap: 72.5, certDate: "2008-02-01", source: "Certification", kind: "certified" },
+  { planYear: 2009, aftap: 55, certDate: "2009-02-01", source: "Certification", kind: "certified" },
+], "01-01", "2009-12-31", null);
+check("WRERA: 2009 Actual 55% carries eAftapPct 72.5", wrera.periods.some((p) => p.planYear === 2009 && p.aftapDisplay === "55%" && p.basis === "Actual" && p.eAftapPct === 72.5));
+check("WRERA: 2009 (e) does not apply (prior year 72.5%)", wrera.periods.filter((p) => p.planYear === 2009 && p.basis === "Actual").every((p) => A36.thresholds(p).e === false));
+check("WRERA: 2009 (b) and (d) still apply at 55%", wrera.periods.filter((p) => p.planYear === 2009 && p.basis === "Actual").every((p) => { const t = A36.thresholds(p); return t.b && t.d; }));
+check("WRERA: 2009 note names the rule", wrera.periods.some((p) => p.planYear === 2009 && p.basis === "Actual" && p.eNote && p.eNote.indexOf("WRERA") === 0));
+const wreraBothLow = A36.buildPeriods([
+  { planYear: 2008, aftap: 55, certDate: "2008-02-01", source: "Certification", kind: "certified" },
+  { planYear: 2009, aftap: 50, certDate: "2009-02-01", source: "Certification", kind: "certified" },
+], "01-01", "2009-12-31", null);
+check("WRERA: both below 60% — (e) still applies", wreraBothLow.periods.filter((p) => p.planYear === 2009 && p.basis === "Actual").every((p) => A36.thresholds(p).e === true));
+check("WRERA: both below 60% — no note (outcome unchanged)", wreraBothLow.periods.every((p) => !p.eNote));
+const wreraFiscal = A36.buildPeriods([
+  { planYear: 2008, aftap: 72, certDate: "2008-08-01", source: "Certification", kind: "certified" },
+  { planYear: 2009, aftap: 55, certDate: "2009-08-01", source: "Certification", kind: "certified" },
+], "07-01", "2010-06-30", null);
+check("WRERA fiscal: Jul-2009 year is the WRERA year", wreraFiscal.periods.some((p) => p.planYear === 2009 && p.aftapDisplay === "55%" && p.eAftapPct === 72));
+check("WRERA fiscal: Jul-2008 year is NOT the WRERA year", wreraFiscal.periods.filter((p) => p.planYear === 2008 && p.basis === "Actual").every((p) => p.eAftapPct === 72 && !p.eNote));
+const lookback = A36.buildPeriods([
+  { planYear: 2008, aftap: 72.5, certDate: "2008-02-01", source: "Certification", kind: "certified" },
+  { planYear: 2009, aftap: 81.25, certDate: "2009-02-01", source: "Certification", kind: "certified" },
+  { planYear: 2010, aftap: 55, certDate: "2010-02-01", source: "Certification", kind: "certified" },
+  { planYear: 2011, aftap: 55, certDate: "2011-02-01", source: "Certification", kind: "certified" },
+], "01-01", "2011-12-31", null);
+check("lookback: 2010 Actual 55% carries eAftapPct 72.5", lookback.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "55%" && p.basis === "Actual" && p.eAftapPct === 72.5));
+check("lookback: 2010 (e) does not apply", lookback.periods.filter((p) => p.planYear === 2010 && p.basis === "Actual").every((p) => A36.thresholds(p).e === false));
+check("lookback: 2011 is outside the window — (e) applies", lookback.periods.filter((p) => p.planYear === 2011 && p.basis === "Actual").every((p) => A36.thresholds(p).e === true));
+check("lookback: 2011 eAftapPct equals its own AFTAP (no substitution)", lookback.periods.filter((p) => p.planYear === 2011 && p.basis === "Actual").every((p) => p.eAftapPct === 55));
+check("demo: 2009–2010 periods carry no eNote (no outcome change)", res.periods.every((p) => !p.eNote));
+
 /* --- 4. Thresholds --- */
 function th(aftapDisplay, aftapPct) { return A36.thresholds({ aftapDisplay, aftapPct, basis: "Actual" }); }
 check("75% blocks (c) only", (() => { const t = th("75%", 75); return !t.b && t.c && !t.d && t.dCap && !t.e; })());
 check("55% blocks (b), (d), (e) and (c)", (() => { const t = th("55%", 55); return t.b && t.c && t.d && !t.dCap && t.e; })());
 check("85% blocks nothing", (() => { const t = th("85%", 85); return !t.b && !t.c && !t.d && !t.dCap && !t.e; })());
 check("<60% blocks everything", (() => { const t = th("< 60%", null); return t.b && t.c && t.d && t.e; })());
+check("<60% with WRERA eAftapPct 72.5: (e) does not apply, others do", (() => { const t = A36.thresholds({ aftapDisplay: "< 60%", aftapPct: null, basis: "Presumed", eAftapPct: 72.5 }); return t.b && t.c && t.d && !t.e; })());
+check("55% with eAftapPct 72.5: (e) does not apply, (b)(c)(d) do", (() => { const t = A36.thresholds({ aftapDisplay: "55%", aftapPct: 55, basis: "Actual", eAftapPct: 72.5 }); return t.b && t.c && t.d && !t.e; })());
 check("N/A blocks nothing (no AFTAP to apply)", (() => { const t = th("N/A", null); return t.na && !t.b && !t.c && !t.d && !t.e; })());
 check("aftapAt finds the period for a date", (() => {
   const p = A36.aftapAt(res.periods, "2010-05-01");

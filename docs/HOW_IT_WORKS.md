@@ -85,6 +85,18 @@ The app computes the AFTAP periods from the history, per Reg.
   immaterial. Materiality is stated by the actuary.
 - The table runs from the 2008 plan year (or the adoption year) to
   DOPT.
+- (e) only: WRERA §203 — for the single plan year beginning Oct 1,
+  2008–Sep 30, 2009, the (e) test uses the greater of the
+  current-year and prior-year AFTAP (freeze only if both are below
+  60%). PRA 2010 lookback — for plan years beginning Oct 1,
+  2008–Sep 30, 2010, the (e) test uses the greater of the
+  current-year AFTAP and the AFTAP for the plan year beginning Oct 1,
+  2007–Sep 30, 2008. The Part 3 AFTAP values are unchanged; only the
+  (e) determination changes, and the Limits column names the rule
+  when it changes the outcome. The prior-year AFTAP is taken as
+  determined under §436 (certified if certified, else the presumed
+  value) — the actuary confirms it; Reg. §1.436-1(e)(3) is
+  [Reserved], so no regulation settles it.
 
 Each period shows the plan year, the AFTAP %, Actual or Presumed, the
 effective dates, and the limits in force.
@@ -119,7 +131,17 @@ filled text.
 ## What the app does not do
 
 - It never certifies an AFTAP. PBGC will not calculate or certify a
-  plan's AFTAP. The app takes certified/stated AFTAPs as inputs.
+  plan's AFTAP. The app takes certified/stated AFTAPs as inputs. The
+  92/94/96% fully-funded transition (IRC §436(j)(3)(B), Reg.
+  §1.436-1(j)(1)(ii)(D)) is a rule about how the enrolled actuary
+  computes a certified AFTAP — whether funding balances reduce
+  assets — so it lives in that computation, not in this app. The
+  (d)(2) bankruptcy threshold stays 100%.
+- The PRA 2010 lookback also applies to (d) social-security-leveling
+  payments; the app does not encode that piece, because it needs a
+  fact the app does not collect (whether a payment is a
+  social-security-leveling payment). The actuary applies it by hand
+  for leveling payments.
 - Part 5 Reviewer Concurrence is a human signature.
 - Three facts the numbers cannot settle: was the UCEB paid, were
   accruals restored, and the 4022 maximum amount for the (d)(3) cap.

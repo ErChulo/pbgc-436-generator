@@ -1,36 +1,78 @@
 # 436 Generator — Open Items
 
-Items left open in v0.2.0. Each needs a decision, a check, or a later
+Items left open in v0.2.1. Each needs a decision, a check, or a later
 version. Resolved items stay listed with their decision.
 
 ## Open
 
-### 11. WRERA (e)(1) 2008/2009 transition quirk — NOT ENCODED
+### 14. PRA lookback, (d) social-security-leveling piece — NOT ENCODED
 
-The Worker, Retiree, and Employer Recovery Act of 2008 (Pub. L.
-110–458, §203) provides that for the first plan year beginning
-Oct 1, 2008–Sep 30, 2009, §436(e)(1) is applied by substituting the
-prior-year AFTAP if greater. It affects only the (e) accrual-freeze
-limit in that one-year window, not the Part 3 AFTAP table. The app
-does not encode it. Decide in v0.3.0 whether to encode it or leave it
-as an actuary note.
+The PRA 2010 lookback also applies to (d) social-security-leveling
+payments (the (e) piece is encoded, item 11). The app does not encode
+the (d) piece: it needs a fact the app does not collect (whether a
+prohibited payment is a social-security-leveling payment). The
+actuary applies it by hand for leveling payments. If a later version
+collects the payment form, encode it then.
 
-### 12. Fully-funded transition 92/94/96% — NOT ENCODED
+### 15. WRERA prior-year AFTAP: certified vs presumed — JUDGMENT CALL
 
-Reg. §1.436-1(j)(1)(ii)(D) preserves a transition: the fully-funded
-threshold is 92% for 2008, 94% for 2009, 96% for 2010. It affects
-only the fully-funded edge (100% threshold), not the 60/80 limits.
-The app does not encode it.
+The WRERA text says "the plan's AFTAP for the preceding plan year"
+with no "certified" or "presumed". The app takes the preceding year's
+AFTAP as determined under §436 (certified if certified, else the (h)
+presumed value in effect). Reg. §1.436-1(e)(3) is [Reserved], so no
+regulation settles it. The actuary confirms the value on the case.
 
-### 13. ERISA parallel not read — BELT-AND-BRACES CHECK
+### 16. PRA lookback window endpoints — ASSUMPTION
 
-The v0.2.0 rule research read IRC §436, Reg. §1.436-1, and DB Answer
-Book Ch. 22, but did not read ERISA 29 USC §1056(g). It was not
-needed: the IRC text plus the regulation fully determine every rule
-the app encodes, and ERISA §206(g) mirrors §436 for these purposes.
-A belt-and-braces read is still open if wanted.
+The PRA windows are read as "after Sep 30 / before Oct 1": lookback
+years start Oct 1, 2008–Sep 30, 2010; the base year starts Oct 1,
+2007–Sep 30, 2008. A plan year starting exactly Oct 1, 2010 does not
+get the lookback under this reading. Flagged here so a later check
+against the PRA text can confirm or correct it.
 
 ## Resolved
+
+### 11. WRERA (e)(1) 2008/2009 transition quirk — ENCODED (v0.2.1)
+
+Verified against the WRERA enrolled bill (H.R. 7327 §203, Pub. L.
+110–458) and the JCT Technical Explanation (JCX-85-08, pp. 30–31).
+For the single plan year beginning Oct 1, 2008–Sep 30, 2009, the (e)
+test uses the greater of the current-year and prior-year AFTAP —
+freeze only if both are below 60%. (e) only; (b), (c), (d) and the
+Part 3 AFTAP values are unaffected. The Limits column names the rule
+when it changes the outcome, and the Part 4 (e) draft carries the
+note when a freeze date is given.
+
+Encoded with it (same mechanism, adjacent years): the PRA 2010 §203
+lookback — for plan years beginning Oct 1, 2008–Sep 30, 2010, the (e)
+test uses the greater of the current-year AFTAP and the AFTAP for the
+plan year beginning Oct 1, 2007–Sep 30, 2008. In the WRERA year both
+apply: the greater of the three. The (d) leveling piece is open
+(item 14). The demo is unaffected (2009 prior 72.5% ≥ 60%; 2010
+lookback max(69.8%, 72.5%) = 72.5% — no freeze either way).
+
+### 12. Fully-funded transition 92/94/96% — DECIDED: no encoding (v0.2.1)
+
+Verified against IRC §436(j)(3) as enacted and Reg.
+§1.436-1(j)(1)(ii)(B), (D), (E). Correction to the earlier reading:
+the transition does NOT change the (d)(2) bankruptcy 100%
+threshold. "Fully-funded" here means the rule about whether funding
+balances reduce assets when computing the AFTAP — a rule that feeds
+every §436 determination, and the app takes certified AFTAPs as
+inputs. Nothing to encode; a note in Step 2 says so, and the (d)(2)
+threshold stays 100%.
+
+### 13. ERISA parallel not read — READ, VERIFIED MIRROR (v0.2.1)
+
+ERISA 29 USC §1056(g) read in full (govinfo 2018 U.S. Code, checked
+against the 2007 as-enacted edition). It mirrors IRC §436 for every
+rule the app encodes: the 60/80/100 thresholds, the (h) presumption
+rules, the (d)(3) cap and one-time rule, and the fully-funded
+transition as enacted (struck 2014, same as the Code). No change.
+Two notes: the range/late/recertification mechanics live only in
+Reg. §1.436-1(h)(4) (no ERISA statutory parallel) — the app's
+encoding stands as-is; and the §101(j) notice duty is ERISA-only and
+not part of the §436 Evaluation template.
 
 ### 1. April 1 step-down: the "within 10 points" condition — RESOLVED (v0.2.0)
 

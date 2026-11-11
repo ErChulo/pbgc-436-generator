@@ -228,6 +228,23 @@ check("lookback: 2011 is outside the window — (e) applies", lookback.periods.f
 check("lookback: 2011 eAftapPct equals its own AFTAP (no substitution)", lookback.periods.filter((p) => p.planYear === 2011 && p.basis === "Actual").every((p) => p.eAftapPct === 55));
 check("demo: 2009–2010 periods carry no eNote (no outcome change)", res.periods.every((p) => !p.eNote));
 
+/* --- 3g. PRA lookback, (d) leveling payments ---
+   The lookback applies to (d) only for payments under a
+   social-security-leveling option. The (d) AFTAP is max(current,
+   base-year AFTAP) in lookback years; the WRERA prior-year value
+   never applies to (d). The note fires only when the (d) band moves. */
+check("leveling: 2010 55% carries dLevelAftapPct 72.5", lookback.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "55%" && p.basis === "Actual" && p.dLevelAftapPct === 72.5));
+check("leveling: 2010 55% carries a dLevelNote", lookback.periods.some((p) => p.planYear === 2010 && p.aftapDisplay === "55%" && p.basis === "Actual" && p.dLevelNote && p.dLevelNote.indexOf("PRA lookback") === 0));
+check("leveling: 2011 55% carries no dLevelNote", lookback.periods.filter((p) => p.planYear === 2011 && p.basis === "Actual").every((p) => !p.dLevelNote));
+check("leveling: band unchanged means no note", (() => {
+  const ps = A36.buildPeriods([
+    { planYear: 2008, aftap: 72.5, certDate: "2008-02-01", source: "Certification", kind: "certified" },
+    { planYear: 2010, aftap: 65, certDate: "2010-02-01", source: "Certification", kind: "certified" },
+  ], "01-01", "2010-12-31", null).periods.filter((p) => p.planYear === 2010 && p.basis === "Actual");
+  return ps.length > 0 && ps.every((p) => p.dLevelAftapPct === 72.5 && !p.dLevelNote);
+})());
+check("demo: no dLevelNote anywhere", res.periods.every((p) => !p.dLevelNote));
+
 /* --- 4. Thresholds --- */
 function th(aftapDisplay, aftapPct) { return A36.thresholds({ aftapDisplay, aftapPct, basis: "Actual" }); }
 check("75% blocks (c) only", (() => { const t = th("75%", 75); return !t.b && t.c && !t.d && t.dCap && !t.e; })());
@@ -262,6 +279,14 @@ check("draft (d) mentions the 50% cap", draft.d.indexOf("50%") >= 0);
 check("draft (d) cites the AFTAP at a payment date", (() => {
   const d2 = A36.draftPart4({ b: "no", c: "no", d: "yes", e: "no" }, res.periods, { paymentDates: [{ date: "2010-05-01", description: "lump sum" }] });
   return d2.d.indexOf("71.25%") >= 0;
+})());
+check("draft (d) leveling payment in 2010 cites the lookback AFTAP", (() => {
+  const d3 = A36.draftPart4({ b: "no", c: "no", d: "yes", e: "no" }, lookback.periods, { paymentDates: [{ date: "2010-05-01", description: "leveling", leveling: true }] });
+  return d3.d.indexOf("PRA lookback") >= 0 && d3.d.indexOf("72.5%") >= 0;
+})());
+check("draft (d) non-leveling payment in 2010 cites no lookback", (() => {
+  const d4 = A36.draftPart4({ b: "no", c: "no", d: "yes", e: "no" }, lookback.periods, { paymentDates: [{ date: "2010-05-01", description: "lump sum", leveling: false }] });
+  return d4.d.indexOf("PRA lookback") < 0;
 })());
 
 /* --- 8. .docx bytes --- */

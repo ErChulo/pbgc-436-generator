@@ -1,1 +1,1 @@
-{"description":"436 Generator — Section 436 limitations analysis filler. Single HTML file deliverable (436-generator.html).","devDependencies":{"jsdom":"^27.0.0"},"name":"436-generator","private":true,"scripts":{"test":"node tests/run.cjs && node tests/browser.cjs"},"version":"0.2.1"}
+{"description":"436 Generator — Section 436 limitations analysis filler. Single HTML file deliverable (436-generator.html).","devDependencies":{"jsdom":"^27.0.0"},"name":"436-generator","private":true,"scripts":{"test":"node tests/run.cjs && node tests/browser.cjs"},"version":"0.2.2"}

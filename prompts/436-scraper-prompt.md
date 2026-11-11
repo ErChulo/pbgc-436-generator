@@ -45,7 +45,8 @@ single-employer defined-benefit pension plan. Find:
    - (d) Did the plan provide prohibited payments (non-de minimis lump
      sums, period-certain benefits, non-life-annuity forms) with an ASD
      or BCD on or after the later of the plan's adoption date and
-     FD-PY2008? List each payment and its date. Note if benefits did
+     FD-PY2008? List each payment and its date, and say whether each
+     payment is under a social-security-leveling option. Note if benefits did
      not accrue on or after 09/01/2005 (state the date accruals ceased).
    - (e) Did benefits accrue for any participant on or after the later
      of the plan's adoption date and FD-PY2008? Give the accrual freeze
@@ -99,7 +100,7 @@ explanation. The JSON must have exactly these top-level keys:
 
 ```json
 {
-  "version": "0.2.1",
+  "version": "0.2.2",
   "caseData": {
     "planName": "string",
     "einPin": "string or null",
@@ -147,7 +148,7 @@ explanation. The JSON must have exactly these top-level keys:
     "accrualFreezeDate": "YYYY-MM-DD or null",
     "f4022Max": "number or null",
     "amendmentDates": [{ "date": "YYYY-MM-DD", "description": "string" }],
-    "paymentDates": [{ "date": "YYYY-MM-DD", "description": "string" }]
+    "paymentDates": [{ "date": "YYYY-MM-DD", "description": "string", "leveling": "true | false | null (true if under a social-security-leveling option)" }]
   }
 }
 ```

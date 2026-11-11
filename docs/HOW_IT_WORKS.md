@@ -97,6 +97,11 @@ The app computes the AFTAP periods from the history, per Reg.
   determined under §436 (certified if certified, else the presumed
   value) — the actuary confirms it; Reg. §1.436-1(e)(3) is
   [Reserved], so no regulation settles it.
+- (d) only, leveling payments: the same PRA lookback applies to the
+  (d) test for payments under a social-security-leveling option. Mark
+  a payment as leveling in the import JSON; the Part 4 (d) draft
+  cites the lookback AFTAP for that payment. The WRERA prior-year
+  value never applies to (d).
 
 Each period shows the plan year, the AFTAP %, Actual or Presumed, the
 effective dates, and the limits in force.
@@ -138,10 +143,10 @@ filled text.
   assets — so it lives in that computation, not in this app. The
   (d)(2) bankruptcy threshold stays 100%.
 - The PRA 2010 lookback also applies to (d) social-security-leveling
-  payments; the app does not encode that piece, because it needs a
-  fact the app does not collect (whether a payment is a
-  social-security-leveling payment). The actuary applies it by hand
-  for leveling payments.
+  payments; the app encodes it (v0.2.2) for payments marked leveling
+  in the import JSON. The app assumes a first-day valuation date;
+  the alternate-valuation-date variant (plan years beginning after
+  Dec 31, 2007, before Jan 1, 2010) is not modeled.
 - Part 5 Reviewer Concurrence is a human signature.
 - Three facts the numbers cannot settle: was the UCEB paid, were
   accruals restored, and the 4022 maximum amount for the (d)(3) cap.

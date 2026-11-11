@@ -1,13 +1,13 @@
 # 436 Generator
 
-![Tests: 165 passing](https://img.shields.io/badge/tests-165%20passing-brightgreen)
-![Unit tests: 100 passing](https://img.shields.io/badge/unit%20tests-100%20passing-brightgreen)
+![Tests: 172 passing](https://img.shields.io/badge/tests-172%20passing-brightgreen)
+![Unit tests: 107 passing](https://img.shields.io/badge/unit%20tests-107%20passing-brightgreen)
 ![Browser tests: 65 passing](https://img.shields.io/badge/browser%20tests-65%20passing-brightgreen)
 ![DOCX checks: passing](https://img.shields.io/badge/docx%20checks-passing-brightgreen)
 ![Network calls: 0](https://img.shields.io/badge/network%20calls-0-brightgreen)
-![Version: v0.2.1](https://img.shields.io/badge/version-v0.2.1-blue)
+![Version: v0.2.2](https://img.shields.io/badge/version-v0.2.2-blue)
 
-Badges show grades measured on v0.2.1. Update badges when tests change.
+Badges show grades measured on v0.2.2. Update badges when tests change.
 
 ## Purpose
 
@@ -96,6 +96,25 @@ PBGC logo on the blue header in both themes.
 v0.2.0. Template: 436_Evaluation_Template_v0.2.0.docx (blank,
 2026-07-27). No data from the partially filled Nov 2025 file is used
 anywhere in this repo.
+
+### v0.2.2 — what changed
+
+- PRA 2010 lookback, (d) leveling piece, now encoded: for payments
+  under a social-security-leveling option in plan years beginning
+  Oct 1, 2008–Sep 30, 2010, the (d) test uses the greater of the
+  current-year AFTAP and the base-year AFTAP. Mark a payment as
+  leveling in the import JSON (`paymentDates[].leveling`); the Part 4
+  (d) draft cites the lookback AFTAP for leveling payments. The
+  WRERA prior-year value never applies to (d).
+- PRA windows verified against PRA 2010 §203(a)(2): the lookback
+  years are "beginning on or after October 1, 2008, and before
+  October 1, 2010" (exact match). The base year is "beginning after
+  October 1, 2007, and before October 1, 2008" — the app reads it as
+  Oct 1, 2007–Sep 30, 2008, which matches for every plan-year start
+  except Oct 1, where the strict reading gives no base year and the
+  app uses the Oct 1, 2007 year (the pre-crisis year).
+- Tests: 172 passing (107 unit, 65 browser). Demo .docx verified
+  (14 periods, unchanged).
 
 ### v0.2.1 — what changed
 

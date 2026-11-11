@@ -1,18 +1,10 @@
 # 436 Generator — Open Items
 
-Items left open in v0.2.1. Each needs a decision, a check, or a later
-version. Resolved items stay listed with their decision.
+Items left open in v0.2.2. Resolved items stay listed with their
+decision. One item below cannot be closed by research — it is a
+judgment call for the actuary, not unfinished work.
 
 ## Open
-
-### 14. PRA lookback, (d) social-security-leveling piece — NOT ENCODED
-
-The PRA 2010 lookback also applies to (d) social-security-leveling
-payments (the (e) piece is encoded, item 11). The app does not encode
-the (d) piece: it needs a fact the app does not collect (whether a
-prohibited payment is a social-security-leveling payment). The
-actuary applies it by hand for leveling payments. If a later version
-collects the payment form, encode it then.
 
 ### 15. WRERA prior-year AFTAP: certified vs presumed — JUDGMENT CALL
 
@@ -20,17 +12,37 @@ The WRERA text says "the plan's AFTAP for the preceding plan year"
 with no "certified" or "presumed". The app takes the preceding year's
 AFTAP as determined under §436 (certified if certified, else the (h)
 presumed value in effect). Reg. §1.436-1(e)(3) is [Reserved], so no
-regulation settles it. The actuary confirms the value on the case.
-
-### 16. PRA lookback window endpoints — ASSUMPTION
-
-The PRA windows are read as "after Sep 30 / before Oct 1": lookback
-years start Oct 1, 2008–Sep 30, 2010; the base year starts Oct 1,
-2007–Sep 30, 2008. A plan year starting exactly Oct 1, 2010 does not
-get the lookback under this reading. Flagged here so a later check
-against the PRA text can confirm or correct it.
+regulation settles it. No further research can close this — the
+statute, the JCT explanation, and the DB Answer Book (which never
+mentions WRERA §203) are all silent. The actuary confirms the value
+on the case. In practice it almost never matters: the prior year is
+nearly always certified by the time the WRERA-year (e) determination
+is made.
 
 ## Resolved
+
+### 14. PRA lookback, (d) social-security-leveling piece — ENCODED (v0.2.2)
+
+Yes, it was possible. It needed one new fact: whether a payment is
+under a social-security-leveling option. The schema and scraper
+prompt now carry `paymentDates[].leveling`. For a leveling payment
+in a lookback year, the Part 4 (d) draft cites the lookback AFTAP
+(max of the current-year and base-year AFTAP). The WRERA prior-year
+value never applies to (d).
+
+### 16. PRA lookback window endpoints — VERIFIED (v0.2.2)
+
+Verified against PRA 2010 §203(a)(2) (Tax Notes summary of the
+statute; govinfo U.S. Code notes). The lookback years are "beginning
+on or after October 1, 2008, and before October 1, 2010" — an exact
+match for the app's window (Oct 1, 2008–Sep 30, 2010). The base year
+is "beginning after October 1, 2007, and before October 1, 2008" —
+the app reads it as Oct 1, 2007–Sep 30, 2008, which matches for every
+plan-year start except Oct 1, where the strict reading gives no base
+year and the app uses the Oct 1, 2007 year (the pre-crisis year) as
+the base. The app assumes a first-day valuation date; the
+alternate-valuation-date variant (plan years beginning after Dec 31,
+2007, before Jan 1, 2010) is not modeled.
 
 ### 11. WRERA (e)(1) 2008/2009 transition quirk — ENCODED (v0.2.1)
 

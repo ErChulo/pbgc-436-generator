@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>436 Generator — Section 436 Limitations Analysis</title>
+<style>
+/* PBGC Design System v1.1.0 DRAFT (tokens/tokens.json, commit 84a7149d, 2026-11-08). NOT approved. Dark theme: toggle in header; page background #000 (user override of provisional night-0 #0B1B36); provisional, COLA approval pending. Logos: official PBGC PNGs embedded as data URIs (see header). */
+:root{
+  --blue:#002D72; --red:#E4002B; --med-blue:#004B8D;
+  --ink:#1A1A1A; --gray-1:#58585B; --gray-2:#D2D2D2; --gray-3:#E0E0E0; --gray-4:#F2F2F2;
+  --error:#B3001B; --error-tint:#FDECEF; --warning:#8A5700; --warning-tint:#FFF4D6;
+  --success:#008065; --success-tint:#E6F2EF; --info-tint:#EAF0F8; --white:#FFFFFF;
+  --bg:#FFFFFF; --surface:#FFFFFF; --focus:#004B8D;
+  --font:"Helvetica Neue",Arial,sans-serif; --mono:Consolas,"Courier New",monospace;
+  --radius:4px;
+}
+:root[data-theme="dark"]{
+  --bg:#000000; --surface:#12294D; --focus:#FFFFFF;
+  --ink:#F2F2F2; --gray-1:#D2D2D2; --gray-2:#1B3866; --gray-3:#1B3866; --gray-4:#12294D;
+  --error:#FFB3BD; --error-tint:#12294D; --warning:#FFD27A; --warning-tint:#12294D;
+  --success:#B8D3A7; --success-tint:#12294D; --info-tint:#12294D; --med-blue:#BEC6DF;
+}
+:root[data-theme="dark"] body{background:#000000}
+:root[data-theme="dark"] .card{background:var(--surface)}
+:root[data-theme="dark"] input,:root[data-theme="dark"] select,:root[data-theme="dark"] textarea{background:var(--bg);border-color:#8B9FC7}
+:root[data-theme="dark"] .views{border-bottom-color:#1B3866}
+:root[data-theme="dark"] .nav-link{color:#BEC6DF}
+:root[data-theme="dark"] .nav-link[aria-current="page"]{border-bottom-color:#BEC6DF}
+:root[data-theme="dark"] .menu-toggle{color:#BEC6DF}
+:root[data-theme="dark"] button.primary{background:#BEC6DF;border-color:#BEC6DF;color:#002D72}
+:root[data-theme="dark"] button.primary:hover{background:#FFFFFF;border-color:#FFFFFF;color:#002D72}
+:root[data-theme="dark"] button.secondary{background:#0B1B36;border-color:#BEC6DF;color:#BEC6DF}
+:root[data-theme="dark"] button.secondary:hover{background:#12294D}
+:root[data-theme="dark"] button.danger{background:#FFB3BD;border-color:#FFB3BD;color:#4D000B}
+:root[data-theme="dark"] button.danger:hover{background:#FFFFFF;border-color:#FFFFFF;color:#4D000B}
+:root[data-theme="dark"] .stepper li.current{border-color:#BEC6DF}
+body{font-family:var(--font);color:var(--ink);background:var(--bg);margin:0;line-height:1.5;font-size:1rem}
+main{max-width:960px;margin:0 auto;padding:0 1rem 2rem}
+h1{font-size:1.5rem;line-height:1.25;margin:0}
+h2{font-size:1.25rem;line-height:1.3;margin:1.5rem 0 .5rem}
+h3{font-size:1.1rem;margin:1.25rem 0 .5rem}
+p{margin:.5rem 0}
+.small{font-size:.875rem;color:var(--gray-1)}
+.skip-link{position:absolute;left:1rem;top:-4rem;background:var(--white);color:var(--blue);padding:.5rem 1rem;border:2px solid var(--blue);border-radius:var(--radius);z-index:100;font-weight:700}
+.skip-link:focus{top:.5rem}
+.topbar{background:var(--blue);color:var(--white);padding:.5rem 0}
+.topbar h1{color:var(--white);font-size:1.25rem;line-height:1.25}
+.topbar .tag{color:var(--white);margin:0;font-size:.875rem}
+.topbar .wrap{max-width:960px;margin:0 auto;padding:0 1rem;display:flex;align-items:center;gap:.75rem}
+.topbar .logo{height:52px;width:auto;flex:none}
+.topbar .title{flex:1;min-width:0}
+.theme-toggle{flex:none;background:transparent;color:var(--white);border:2px solid var(--white)}
+.views{background:var(--bg);border-bottom:1px solid var(--gray-2)}
+.views .wrap{max-width:960px;margin:0 auto;padding:0 1rem;display:flex;align-items:center;gap:.25rem;flex-wrap:wrap}
+.nav-link{display:flex;align-items:center;min-height:44px;padding:.5rem .75rem;color:var(--blue);text-decoration:none}
+.nav-link:hover{text-decoration:underline}
+.nav-link[aria-current="page"]{font-weight:700;border-bottom:3px solid var(--blue)}
+.menu-toggle{display:none}
+button{font-family:var(--font);font-size:1rem;min-height:44px;padding:.5rem 1rem;border-radius:var(--radius);cursor:pointer}
+button.primary{background:var(--blue);color:var(--white);border:2px solid var(--blue)}
+button.primary:hover{background:var(--med-blue);border-color:var(--med-blue)}
+button.secondary{background:var(--white);color:var(--blue);border:2px solid var(--blue)}
+button.secondary:hover{background:var(--gray-4)}
+button.danger{background:var(--error);color:var(--white);border:2px solid var(--error)}
+button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+input,select,textarea{font-family:var(--font);font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--gray-1);border-radius:var(--radius);padding:.5rem;width:100%;margin:.25rem 0 .75rem}
+input[type="checkbox"],input[type="radio"]{width:auto;margin:0 .25rem 0 0}
+label{font-weight:700;display:block;margin-top:.5rem}
+label .opt{font-weight:400}
+.card{border:1px solid var(--gray-2);border-radius:var(--radius);padding:1rem;margin:1rem 0;background:var(--surface)}
+.stepper{list-style:none;display:flex;gap:.5rem;padding:0;margin:1rem 0;flex-wrap:wrap}
+.stepper li{flex:1;min-width:140px;border:1px solid var(--gray-2);border-radius:var(--radius);padding:.5rem;cursor:pointer}
+.stepper li.current{border:2px solid var(--blue)}
+.stepper li.done{border-color:var(--success);background:var(--success-tint)}
+.stepper li .n{font-weight:700}
+.alert{border:1px solid var(--error);background:var(--error-tint);border-radius:var(--radius);padding:.75rem;margin:.75rem 0}
+.warn{border:1px solid var(--warning);background:var(--warning-tint);border-radius:var(--radius);padding:.75rem;margin:.75rem 0}
+.info{border:1px solid var(--med-blue);background:var(--info-tint);border-radius:var(--radius);padding:.75rem;margin:.75rem 0}
+.ok{border:1px solid var(--success);background:var(--success-tint);border-radius:var(--radius);padding:.75rem;margin:.75rem 0}
+.badge{display:inline-block;padding:.1rem .5rem;border-radius:var(--radius);font-size:.875rem;font-weight:700}
+.badge.present{background:var(--success-tint);color:var(--success)}
+.badge.presumed{background:var(--warning-tint);color:var(--warning)}
+.badge.below60{background:var(--error-tint);color:var(--error)}
+.badge.below80{background:var(--warning-tint);color:var(--warning)}
+.badge.ok{background:var(--success-tint);color:var(--success)}
+.badge.na{background:var(--gray-4);color:var(--gray-1)}
+table{border-collapse:collapse;width:100%;margin:.75rem 0}
+th,td{border:1px solid var(--gray-2);padding:.5rem;text-align:left;vertical-align:top;font-size:.875rem}
+th{background:var(--gray-4);font-weight:700}
+tr:nth-child(even) td{background:var(--gray-4)}
+textarea{font-family:var(--mono);font-size:.875rem}
+footer{margin:2rem 0 1rem;border-top:1px solid var(--gray-2);padding-top:1rem}
+@media (max-width:640px){
+  .topbar .logo{height:44px}
+  .menu-toggle{display:inline-flex;align-items:center;min-height:44px;background:transparent;border:0;color:var(--blue);font-weight:700;padding:.5rem .75rem .5rem 0;cursor:pointer}
+  .views .wrap{flex-wrap:wrap}
+  .nav-link{display:none;width:100%}
+  .views.open .nav-link{display:flex}
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="topbar">
+  <div class="wrap">
+    <img class="logo" id="pbgc-logo" alt="PBGC" src="data:image/png;base64,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">
+    <div class="title">
+      <h1>436 Generator</h1>
+      <p class="tag">Section 436 limitations analysis</p>
+    </div>
+    <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch theme">Dark</button>
+  </div>
+</header>
+<nav class="views" id="views" aria-label="Pages">
+  <div class="wrap">
+    <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="views">Menu</button>
+    <a class="nav-link" href="#436" data-view="436" aria-current="page">436 generator</a>
+    <a class="nav-link" href="#welcome" data-view="welcome">Welcome</a>
+    <a class="nav-link" href="#help" data-view="help">Help</a>
+  </div>
+</nav>
+<main id="main">
+  <section id="view-436" data-view-page="436">
+    <ol class="stepper" id="stepper" aria-label="Workflow steps">
+      <li data-step="1" class="current"><span class="n">1</span> Case</li>
+      <li data-step="2"><span class="n">2</span> AFTAP history</li>
+      <li data-step="3"><span class="n">3</span> Part 1</li>
+      <li data-step="4"><span class="n">4</span> Part 3 table</li>
+      <li data-step="5"><span class="n">5</span> Review</li>
+      <li data-step="6"><span class="n">6</span> Download</li>
+    </ol>
+    <div id="step-1" class="step">
+      <h2>Step 1 — Case</h2>
+      <p>Header fields for the §436 Evaluation memo. Case number is text; leading zeros are kept.</p>
+      <div class="card">
+        <label for="f-plan-name">Plan name</label>
+        <input id="f-plan-name" type="text" autocomplete="off">
+        <label for="f-ein-pin">EIN / PIN</label>
+        <input id="f-ein-pin" type="text" autocomplete="off">
+        <label for="f-case-number">PBGC case number</label>
+        <input id="f-case-number" type="text" autocomplete="off" inputmode="numeric">
+        <label for="f-dopt">DOPT</label>
+        <input id="f-dopt" type="date">
+        <label for="f-dotr">DOTR</label>
+        <input id="f-dotr" type="date">
+        <label for="f-bpd">BPD</label>
+        <input id="f-bpd" type="date">
+        <label for="f-dobf">DOBF (plan date of benefit freeze)</label>
+        <input id="f-dobf" type="date">
+        <label for="f-fd-py">FD-PY (month/day, e.g. 01/01)</label>
+        <input id="f-fd-py" type="text" autocomplete="off" placeholder="01/01">
+        <label for="f-plan-year-start">Plan year start (month-day, e.g. 01-01)</label>
+        <input id="f-plan-year-start" type="text" autocomplete="off" placeholder="01-01">
+        <label for="f-to-name">To (Supervisory Actuary name)</label>
+        <input id="f-to-name" type="text" autocomplete="off">
+        <label for="f-to-section">To (section, e.g. ASD-D)</label>
+        <input id="f-to-section" type="text" autocomplete="off">
+        <label for="f-from-name">From (actuary name)</label>
+        <input id="f-from-name" type="text" autocomplete="off">
+        <label for="f-from-section">From (section, e.g. ASD-D)</label>
+        <input id="f-from-section" type="text" autocomplete="off">
+        <label for="f-memo-date">Memo date</label>
+        <input id="f-memo-date" type="date">
+      </div>
+      <p>
+        <button class="primary" id="btn-to-step2" type="button">Continue to AFTAP history</button>
+        <button class="secondary" id="btn-demo" type="button">Try the demo</button>
+      </p>
+    </div>
+    <div id="step-2" class="step" hidden>
+      <h2>Step 2 — AFTAP history</h2>
+      <p>Type the certification history in the grid, or paste it from Excel. One row per plan year. The app computes the Part 3 table from this grid.</p>
+      <div class="card">
+        <table id="aftap-grid" aria-label="AFTAP certification history">
+          <thead>
+            <tr><th>Plan year</th><th>AFTAP %</th><th>Certification date</th><th>Source</th><th>IPS ref</th><th></th></tr>
+          </thead>
+          <tbody id="aftap-grid-body"></tbody>
+        </table>
+        <p>
+          <button class="secondary" id="btn-add-row" type="button">Add row</button>
+          <button class="secondary" id="btn-paste-hint" type="button">Paste from Excel</button>
+        </p>
+        <p class="small" id="paste-hint" hidden>Paste a block from Excel (columns: plan year, AFTAP %, certification date, source, IPS ref) into the first cell of an empty row. Tab and newline separate columns and rows.</p>
+        <div id="aftap-errors" aria-live="polite"></div>
+      </div>
+      <p>
+        <button class="secondary" id="btn-back1" type="button">Back</button>
+        <button class="primary" id="btn-to-step3" type="button">Continue to Part 1</button>
+      </p>
+    </div>
+    <div id="step-3" class="step" hidden>
+      <h2>Step 3 — Part 1</h2>
+      <p>Four questions. Answer each No, N/A, or Yes. If all four are No or N/A, no §436 limitation applied before DOPT — skip to Part 5. If any is Yes, continue to Part 2.</p>
+      <div class="card" id="part1-card"></div>
+      <p>
+        <button class="secondary" id="btn-back2" type="button">Back</button>
+        <button class="primary" id="btn-to-step4" type="button">Compute Part 3 table</button>
+      </p>
+    </div>
+    <div id="step-4" class="step" hidden>
+      <h2>Step 4 — Part 3 AFTAP table</h2>
+      <p>Computed from the AFTAP history. Periods run from the start of the 2008 plan year to DOPT.</p>
+      <div class="card" id="part3-card"></div>
+      <p>
+        <button class="secondary" id="btn-back3" type="button">Back</button>
+        <button class="primary" id="btn-to-step5" type="button">Continue to review</button>
+      </p>
+    </div>
+    <div id="step-5" class="step" hidden>
+      <h2>Step 5 — Review</h2>
+      <p>Check the computed table and the draft Part 4 conclusions. Edit the draft before you download.</p>
+      <div class="card" id="review-card"></div>
+      <p>
+        <button class="secondary" id="btn-back4" type="button">Back</button>
+        <button class="primary" id="btn-to-step6" type="button">Continue to download</button>
+      </p>
+    </div>
+    <div id="step-6" class="step" hidden>
+      <h2>Step 6 — Download</h2>
+      <p>Download the filled §436 Evaluation Word document.</p>
+      <div class="card" id="download-card"></div>
+      <p>
+        <button class="secondary" id="btn-back5" type="button">Back</button>
+        <button class="primary" id="btn-download-docx" type="button">Download .docx</button>
+        <button class="secondary" id="btn-download-json" type="button">Download inputs JSON</button>
+      </p>
+    </div>
+  </section>
+  <section id="view-welcome" data-view-page="welcome" hidden>
+    <h2>Welcome</h2>
+    <p>This app builds the §436 Evaluation — the memo that decides whether any of the four IRC §436 funding-based limitations applied to the plan before DOPT, and how they affect the benefits PBGC calculates, values, and pays.</p>
+    <p>Workflow: Case → AFTAP history → Part 1 → Part 3 table → Review → Download.</p>
+    <p>The AFTAP history is the input. Type it in the grid, paste it from Excel, or let the scraper prompt propose it. The app computes the presumed AFTAPs, the periods, and the thresholds. It never certifies an AFTAP — PBGC will not calculate or certify a plan's AFTAP.</p>
+    <p><button class="primary" id="btn-welcome-demo" type="button">Try the demo</button></p>
+  </section>
+  <section id="view-help" data-view-page="help" hidden>
+    <h2>Help</h2>
+    <h3>AFTAP history</h3>
+    <p>One row per plan year, from the later of the plan adoption date and PY2007. AFTAP % is the certified AFTAP, or the AFTAP stated in an AVR or Form 5500 Schedule SB where no certification exists. Certification date is the signed date. Source is Certification, AVR, or 5500 SB. IPS ref is the Image Viewer document number.</p>
+    <h3>Presumed AFTAP</h3>
+    <p>The prior year's certified AFTAP is presumed from the plan year start. If no certification by the first day of the 4th month, the presumed AFTAP drops 10 points from April 1. If none by the first day of the 10th month, the AFTAP is conclusively presumed below 60% from October 1.</p>
+    <h3>Part 1</h3>
+    <p>Answer the four questions. N/A covers the new-plan exception (plan in effect less than five full plan years) and the other listed exceptions. All No or N/A means no §436 limitation applied before DOPT.</p>
+    <h3>Download</h3>
+    <p>The .docx is the filled 436 Evaluation template. The file name is the case number plus 436, e.g. 98765400436.docx.</p>
+  </section>
+</main>
+<footer>
+  <p class="small">436 Generator v0.1.0 · PBGC Design System v1.1.0 DRAFT (not approved) · Single HTML file — open it from disk, no server, no data leaves this page.</p>
+</footer>
+
+<script>
+"use strict";
+/* 436 Generator v0.1.0 — Section 436 limitations analysis.
+   Single HTML file. No fetch, no external URLs, no data leaves the page.
+   The app takes certified/stated AFTAPs as inputs and computes presumed
+   AFTAPs, periods, thresholds, and caps. It never certifies an AFTAP.
+   Law: IRC 436 / ERISA 206(g) / Reg 1.436-1. See docs for the reference. */
+var A36_VERSION = "0.1.0";
+var A36_THRESH_B = 60, A36_THRESH_C = 80, A36_THRESH_E = 60, A36_THRESH_D = 60, A36_THRESH_BANKRUPTCY = 100;
+var A36_START_YEAR = 2008;
+
+/* ---------- dates (ISO YYYY-MM-DD, UTC, no timezone shift) ---------- */
+function a36ParseISO(s){
+  if(!s || typeof s !== "string") return null;
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.trim());
+  if(!m) return null;
+  var d = new Date(Date.UTC(+m[1], +m[2]-1, +m[3]));
+  if(d.getUTCFullYear() !== +m[1] || d.getUTCMonth() !== +m[2]-1 || d.getUTCDate() !== +m[3]) return null;
+  return d;
+}
+function a36FmtISO(d){ return d.toISOString().slice(0,10); }
+function a36FmtMDY(d){
+  var mm = String(d.getUTCMonth()+1).padStart(2,"0");
+  var dd = String(d.getUTCDate()).padStart(2,"0");
+  return mm + "/" + dd + "/" + d.getUTCFullYear();
+}
+function a36AddDays(d,n){ var x = new Date(d.getTime()); x.setUTCDate(x.getUTCDate()+n); return x; }
+function a36Cmp(a,b){ return a.getTime() - b.getTime(); }
+function a36Min(a,b){ return a.getTime() <= b.getTime() ? a : b; }
+function a36Max(a,b){ return a.getTime() >= b.getTime() ? a : b; }
+function a36YearStart(year, mmdd){
+  var parts = (mmdd || "01-01").split("-");
+  var mo = Math.max(1, Math.min(12, parseInt(parts[0],10) || 1));
+  var da = Math.max(1, Math.min(31, parseInt(parts[1],10) || 1));
+  return new Date(Date.UTC(year, mo-1, da));
+}
+function a36MonthStart(year, mmdd, monthIndex){
+  /* First day of the Nth month of the plan year (0-based month offset). */
+  var ys = a36YearStart(year, mmdd);
+  var d = new Date(ys.getTime());
+  d.setUTCMonth(d.getUTCMonth() + monthIndex);
+  return d;
+}
+
+/* ---------- AFTAP period builder (Part 3 table) ----------
+   Input: certHistory = [{planYear, aftap (number|null), certDate (ISO|null),
+     source ("Certification"|"AVR"|"5500 SB"), ipsRef, kind ("certified"|"range"|"late"|"recertified")}]
+   plus planYearStart ("MM-DD"), dopt (ISO), adoptionYear (int|null).
+   Output: [{period, planYear, aftapPct (number|null), aftapDisplay, basis ("Actual"|"Presumed"|"N/A"),
+     startDate (ISO), endDate (ISO)}]
+   Rules: prior-year certified AFTAP presumed from plan year start; -10 pts
+   from the first day of the 4th month if no certification by then;
+   conclusively <60% from the first day of the 10th month if none by then.
+   A certification sets the Actual AFTAP from its date. Boundaries:
+   plan-year starts, certification dates, April 1, October 1, DOPT. */
+function a36BuildPeriods(certHistory, planYearStart, doptISO, adoptionYear){
+  var dopt = a36ParseISO(doptISO);
+  if(!dopt) return { errors: ["DOPT is required"], periods: [] };
+  var rows = (certHistory || []).filter(function(r){ return r && r.planYear; });
+  rows.sort(function(a,b){ return a.planYear - b.planYear; });
+  var firstYear = rows.length ? rows[0].planYear : A36_START_YEAR;
+  var startYear = Math.max(A36_START_YEAR, adoptionYear || A36_START_YEAR);
+  /* If the earliest certification is after 2008 and no adoption year was
+     given, start at that year (new plan). Otherwise start at 2008. */
+  if(!adoptionYear && firstYear > A36_START_YEAR) startYear = firstYear;
+  var doptYear = dopt.getUTCFullYear();
+  if(startYear > doptYear) return { errors: ["Start year is after DOPT"], periods: [] };
+
+  /* Certifications, split into two roles. A certification is late if it
+     is marked kind "late" or made on/after the first day of the 10th
+     month of its plan year: it is no certification for its own year, but
+     it is the presumed AFTAP for the next year. A timely certification
+     sets the Actual AFTAP for its own year from its date. */
+  var certForYear = {};
+  var allCerts = [];
+  var errors = [];
+  rows.forEach(function(r){
+    if(r.aftap === null || r.aftap === undefined || r.aftap === "") return;
+    var certDate = r.certDate ? a36ParseISO(r.certDate) : null;
+    if(r.certDate && !certDate){ errors.push("Plan year " + r.planYear + ": certification date is not a valid date"); return; }
+    var oct1 = a36MonthStart(r.planYear, planYearStart, 9);
+    var late = r.kind === "late" || (certDate && a36Cmp(certDate, oct1) >= 0);
+    var entry = { planYear: r.planYear, aftap: +r.aftap, certDate: r.certDate, presumed: late, kind: r.kind || "certified", row: r };
+    allCerts.push(entry);
+    if(!late) certForYear[r.planYear] = entry;
+  });
+  allCerts.sort(function(a,b){ return (a.planYear - b.planYear) || (a36ParseISO(a.certDate || "9999-12-31").getTime() - a36ParseISO(b.certDate || "9999-12-31").getTime()); });
+
+  var periods = [];
+  for(var y = startYear; y <= doptYear; y++){
+    var ys = a36YearStart(y, planYearStart);
+    var ye = a36AddDays(a36YearStart(y+1, planYearStart), -1);
+    if(a36Cmp(ys, dopt) > 0) break;
+    var yearEnd = a36Min(ye, dopt);
+    var apr1 = a36MonthStart(y, planYearStart, 3);
+    var oct1 = a36MonthStart(y, planYearStart, 9);
+    /* Presumed AFTAP at the start of this year: the most recent certified
+       AFTAP from any earlier year (a late certification from the prior
+       year counts — it is the presumed AFTAP for this year). */
+    var prior = null;
+    for(var ci = allCerts.length-1; ci >= 0; ci--){
+      if(allCerts[ci].planYear < y){ prior = allCerts[ci]; break; }
+    }
+    var cert = certForYear[y] || null;
+    var certDate = cert && cert.certDate ? a36ParseISO(cert.certDate) : null;
+
+    /* Boundaries inside this plan year, in order. */
+    var bounds = [ys];
+    if(certDate && a36Cmp(certDate, ys) > 0 && a36Cmp(certDate, yearEnd) <= 0) bounds.push(certDate);
+    if(a36Cmp(apr1, ys) > 0 && a36Cmp(apr1, yearEnd) <= 0) bounds.push(apr1);
+    if(a36Cmp(oct1, ys) > 0 && a36Cmp(oct1, yearEnd) <= 0) bounds.push(oct1);
+    bounds.push(a36AddDays(yearEnd, 1));
+    bounds.sort(function(a,b){ return a.getTime() - b.getTime(); });
+
+    var priorAftap = prior ? prior.aftap : null;
+    for(var i = 0; i < bounds.length - 1; i++){
+      var segStart = bounds[i], segEnd = a36AddDays(bounds[i+1], -1);
+      if(a36Cmp(segStart, yearEnd) > 0) break;
+      segEnd = a36Min(segEnd, yearEnd);
+      var aftap = null, basis = "N/A", display = "N/A";
+      /* No certification made by a date means: none at all, or one dated
+         on/after that date. A certification dated after April 1 does not
+         prevent the April 1 step-down; one dated after October 1 does not
+         prevent the conclusive presumption. */
+      var noCertByApr = !certDate || a36Cmp(certDate, apr1) >= 0;
+      var noCertByOct = !certDate || a36Cmp(certDate, oct1) >= 0;
+      var certified = certDate && a36Cmp(segStart, certDate) >= 0;
+      if(certified){
+        /* A late certification is treated as the presumed AFTAP for the
+           following year, not as an Actual certification of that year. */
+        aftap = cert.aftap; basis = cert.presumed ? "Presumed" : "Actual"; display = a36FmtPct(aftap);
+      } else if(a36Cmp(segStart, oct1) >= 0 && noCertByOct){
+        aftap = null; basis = "Presumed"; display = "< 60%";
+      } else if(a36Cmp(segStart, apr1) >= 0 && noCertByApr && priorAftap !== null){
+        aftap = priorAftap - 10; basis = "Presumed"; display = a36FmtPct(aftap);
+      } else if(priorAftap !== null){
+        aftap = priorAftap; basis = "Presumed"; display = a36FmtPct(aftap);
+      } else {
+        aftap = null; basis = "N/A"; display = "N/A";
+      }
+      /* Merge with the previous period if same year, same AFTAP and basis. */
+      var last = periods[periods.length-1];
+      if(last && last.planYear === y && last.aftapDisplay === display && last.basis === basis){
+        last.endDate = a36FmtISO(segEnd);
+      } else {
+        periods.push({ period: periods.length+1, planYear: y, aftapPct: aftap, aftapDisplay: display, basis: basis, startDate: a36FmtISO(segStart), endDate: a36FmtISO(segEnd) });
+      }
+    }
+  }
+  return { errors: errors, periods: periods };
+}
+function a36FmtPct(v){
+  if(v === null || v === undefined || v === "") return "";
+  var n = +v;
+  if(isNaN(n)) return String(v);
+  return (Math.round(n*100)/100).toFixed(2).replace(/\.00$/,"").replace(/(\.\d)0$/,"$1") + "%";
+}
+
+/* ---------- thresholds per period ---------- */
+function a36Thresholds(period){
+  /* Returns which limitations apply in this period. aftapPct null with
+     display "< 60%" means conclusively below 60%. "N/A" means no AFTAP
+     to apply (2008 transition — no limitation before certification). */
+  var out = { b: false, c: false, d: false, dCap: false, e: false, bankruptcy: false, na: false };
+  if(period.aftapDisplay === "N/A"){ out.na = true; return out; }
+  if(period.aftapDisplay === "< 60%"){ out.b = true; out.c = true; out.d = true; out.e = true; out.bankruptcy = true; return out; }
+  var a = period.aftapPct;
+  if(a === null || a === undefined || isNaN(+a)){ out.na = true; return out; }
+  a = +a;
+  out.b = a < A36_THRESH_B;
+  out.c = a < A36_THRESH_C;
+  out.d = a < A36_THRESH_D;
+  out.dCap = a >= A36_THRESH_D && a < A36_THRESH_C;
+  out.e = a < A36_THRESH_E;
+  out.bankruptcy = a < A36_THRESH_BANKRUPTCY;
+  return out;
+}
+function a36AftapAt(periods, dateISO){
+  var d = a36ParseISO(dateISO);
+  if(!d) return null;
+  for(var i = 0; i < periods.length; i++){
+    var p = periods[i];
+    var s = a36ParseISO(p.startDate), e = a36ParseISO(p.endDate);
+    if(s && e && a36Cmp(d, s) >= 0 && a36Cmp(d, e) <= 0) return p;
+  }
+  return null;
+}
+
+/* ---------- Part 1 preliminary determination ---------- */
+var A36_PART1 = [
+  { id: "b", label: "§436(b) — UCEB", question: "Did the plan provide a UCEB (early unreduced benefits or temporary supplements due to a plant shutdown) for an event on or after FD-PY2008 and before DOPT?" },
+  { id: "c", label: "§436(c) — Amendments", question: "Did amendments increasing benefit liabilities have an adoption or effective date on or after the later of the plan's adoption date and FD-PY2008 and before DOPT?" },
+  { id: "d", label: "§436(d) — Prohibited payments", question: "Did the plan provide prohibited payments (non-de minimis lump sums, period-certain benefits, non-life-annuity forms) with an ASD or BCD on or after the later of the plan's adoption date and FD-PY2008?" },
+  { id: "e", label: "§436(e) — Benefit accruals", question: "Did benefits accrue for any participant on or after the later of the plan's adoption date and FD-PY2008?" }
+];
+function a36Preliminary(answers){
+  var anyYes = A36_PART1.some(function(q){ return answers[q.id] === "yes"; });
+  return { anyYes: anyYes, applies: anyYes };
+}
+
+/* ---------- CBA exception (Reg 1.436-1(k)(2)) ---------- */
+function a36CbaApplies(cba){
+  if(!cba || !cba.ratificationDate || !cba.effectiveDate || !cba.expirationDate) return { applies: false, reason: "CBA dates missing" };
+  var rat = a36ParseISO(cba.ratificationDate), eff = a36ParseISO(cba.effectiveDate), exp = a36ParseISO(cba.expirationDate);
+  if(!rat || !eff || !exp) return { applies: false, reason: "CBA dates invalid" };
+  var cutoff = new Date(Date.UTC(2008, 0, 1));
+  var applies = a36Cmp(rat, cutoff) < 0 && a36Cmp(eff, cutoff) <= 0 && a36Cmp(exp, cutoff) >= 0;
+  var end = null;
+  if(applies){
+    /* Earlier of the first plan year following CBA expiration, or the
+       plan year beginning in 2010. */
+    var firstAfterExp = new Date(Date.UTC(exp.getUTCFullYear()+1, 0, 1));
+    var py2010 = new Date(Date.UTC(2010, 0, 1));
+    end = a36FmtISO(a36Min(firstAfterExp, py2010));
+  }
+  return { applies: applies, endDate: end, reason: applies ? "" : "CBA not ratified before 01/01/2008 or not in effect on 01/01/2008" };
+}
+
+/* ---------- Part 4 draft (conclusions) ----------
+   Drafts one paragraph per limitation from the Part 1 answers and the
+   computed Part 3 table. The actuary reviews and edits the draft.
+   facts: { ucebPaid (bool|null), accrualsRestored (bool|null), f4022Max (number|null),
+     amendmentDates: [{date, description}], paymentDates: [{date, description}], accrualFreezeDate } */
+function a36DraftPart4(answers, periods, facts){
+  facts = facts || {};
+  var out = { b: "", c: "", d: "", e: "" };
+  function aftapLine(dateISO){
+    var p = a36AftapAt(periods, dateISO);
+    if(!p) return "no AFTAP period covers " + dateISO;
+    return "AFTAP " + p.aftapDisplay + " (" + p.basis.toLowerCase() + ", " + a36FmtMDY(a36ParseISO(p.startDate)) + " – " + a36FmtMDY(a36ParseISO(p.endDate)) + ")";
+  }
+  if(answers.b === "yes"){
+    var paid = facts.ucebPaid === true ? "The plan paid the UCEB." : facts.ucebPaid === false ? "The plan did not pay the UCEB." : "Confirm whether the plan paid the UCEB.";
+    out.b = "Section 436(b): the plan provided a UCEB. " + paid + " The applicable AFTAP at the event date governs whether the UCEB was payable: below 60% the UCEB is not payable. [Actuary: add the event date, the AFTAP at that date, and the conclusion.]";
+  } else {
+    out.b = "Section 436(b): the plan did not provide a UCEB due to an event occurring on or after the first day of PY2008. The plan is not subject to a 436(b) limitation.";
+  }
+  if(answers.c === "yes"){
+    var amd = (facts.amendmentDates || []).map(function(a){ return a.date + ": " + aftapLine(a.date); }).join("; ");
+    out.c = "Section 436(c): amendments increased benefit liabilities. " + (amd ? "AFTAP at each amendment date — " + amd + ". " : "") + "An amendment may not take effect while the AFTAP is below 80%. [Actuary: add each amendment, its dates, and whether it took effect.]";
+  } else {
+    out.c = "Section 436(c): no amendment increasing benefit liabilities had an adoption or effective date in the period. The plan is not subject to a 436(c) limitation.";
+  }
+  if(answers.d === "yes"){
+    var pay = (facts.paymentDates || []).map(function(a){ return a.date + ": " + aftapLine(a.date); }).join("; ");
+    out.d = "Section 436(d): the plan provided prohibited payments. " + (pay ? "AFTAP at each payment date — " + pay + ". " : "") + "Below 60% no prohibited payment may be paid; 60% to 80% the payment is capped at the lesser of 50% of the payment or the present value of the PBGC maximum guarantee. [Actuary: add each payment, the cap applied, and whether any payment was necessary to carry out termination.]";
+  } else {
+    out.d = "Section 436(d): the plan did not provide prohibited payments in the period. The plan is not subject to a 436(d) limitation.";
+  }
+  if(answers.e === "yes"){
+    var restored = facts.accrualsRestored === true ? "Accruals were restored." : facts.accrualsRestored === false ? "Accruals were not restored." : "Confirm whether accruals were restored.";
+    out.e = "Section 436(e): benefits accrued in the period. " + restored + " While the AFTAP is below 60%, benefit accruals cease as of the valuation date. [Actuary: add the freeze date, the AFTAP at that date, and the conclusion.]";
+  } else {
+    out.e = "Section 436(e): benefits did not accrue in the period. The plan is not subject to a 436(e) limitation.";
+  }
+  return out;
+}
+
+/* ---------- schema + validation ---------- */
+var A36_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+var A36_SOURCES = ["Certification", "AVR", "5500 SB"];
+var A36_KINDS = ["certified", "range", "late", "recertified"];
+function a36ValidateHistory(rows){
+  var errors = [];
+  if(!Array.isArray(rows) || rows.length === 0) errors.push("AFTAP history is empty");
+  var seen = {};
+  (rows || []).forEach(function(r, i){
+    var where = "Row " + (i+1);
+    if(!r || typeof r !== "object"){ errors.push(where + ": not an object"); return; }
+    if(!r.planYear || isNaN(+r.planYear) || +r.planYear < 2007 || +r.planYear > 2100) errors.push(where + ": plan year is not a valid year");
+    if(seen[r.planYear]) errors.push(where + ": duplicate plan year " + r.planYear);
+    seen[r.planYear] = true;
+    if(r.aftap === null || r.aftap === undefined || r.aftap === "") errors.push(where + ": AFTAP % is missing");
+    else if(isNaN(+r.aftap) || +r.aftap < 0 || +r.aftap > 100) errors.push(where + ": AFTAP % must be 0–100");
+    if(r.certDate && !A36_DATE_RE.test(r.certDate)) errors.push(where + ": certification date must be YYYY-MM-DD");
+    if(r.source && A36_SOURCES.indexOf(r.source) < 0) errors.push(where + ": source must be Certification, AVR, or 5500 SB");
+    if(r.kind && A36_KINDS.indexOf(r.kind) < 0) errors.push(where + ": kind must be certified, range, late, or recertified");
+  });
+  return { errors: errors };
+}
+function a36ValidateCase(c){
+  var errors = [];
+  if(!c) return { errors: ["Case is empty"] };
+  if(!c.planName) errors.push("Plan name is required");
+  if(!c.caseNumber) errors.push("PBGC case number is required");
+  if(!c.dopt || !A36_DATE_RE.test(c.dopt)) errors.push("DOPT must be YYYY-MM-DD");
+  if(c.dotr && !A36_DATE_RE.test(c.dotr)) errors.push("DOTR must be YYYY-MM-DD");
+  if(c.bpd && !A36_DATE_RE.test(c.bpd)) errors.push("BPD must be YYYY-MM-DD");
+  if(c.dobf && !A36_DATE_RE.test(c.dobf)) errors.push("DOBF must be YYYY-MM-DD");
+  return { errors: errors };
+}
+
+/* ---------- demo data (synthetic — invented plan, invented numbers) ----------
+   Summit Manufacturing Pension Plan, case 11223344, DOPT 2013-06-30.
+   Certification history chosen to exercise every period rule:
+   N/A start, certification, presumed carry-forward, April 1 step-down,
+   October 1 conclusive presumption, a year with no certification, DOPT cutoff.
+   Expected periods are in tests/run.cjs (15 periods, hand-computed). */
+var A36_DEMO_CASE = {
+  planName: "Summit Manufacturing Pension Plan", einPin: "12-3456789",
+  caseNumber: "11223344", dopt: "2013-06-30", dotr: "2013-09-15", bpd: "2013-06-30",
+  dobf: "2012-12-31", fdPy: "01/01", planYearStart: "01-01",
+  toName: "Jordan Lee", toSection: "D", fromName: "Alex Morgan", fromSection: "D",
+  memoDate: "2013-07-15", subject: "§436 Evaluation"
+};
+var A36_DEMO_HISTORY = [
+  { planYear: 2008, aftap: 72.50, certDate: "2008-09-15", source: "Certification", ipsRef: "", kind: "certified" },
+  { planYear: 2009, aftap: 81.25, certDate: "2009-02-20", source: "Certification", ipsRef: "", kind: "certified" },
+  { planYear: 2010, aftap: 69.80, certDate: "2010-09-15", source: "Certification", ipsRef: "", kind: "certified" },
+  { planYear: 2012, aftap: 85.00, certDate: "2012-05-01", source: "Certification", ipsRef: "", kind: "certified" }
+];
+var A36_DEMO_ANSWERS = { b: "no", c: "no", d: "yes", e: "no" };
+var A36_DEMO_CBA = { ratificationDate: "", effectiveDate: "", expirationDate: "", ipsRef: "" };
+
+/* PROMPT-START */
+var A36_SCRAPER_PROMPT = "# 436 \u2014 Section 436 Limitations Scraper Prompt\n\nUse this prompt with an LLM of your choice. Attach the plan documents\n**and** the other associated documents \u2014 plan document, amendments,\nrestatements, SPD, trust agreement, actuarial valuation reports (AVR),\nAFTAP certifications, Form 5500 Schedule SB, TWG memo, trusteeship\nagreement, prior administrator data, collective bargaining agreement,\nanything about the plan \u2014 together with this prompt. The LLM must return\n**only** the JSON payload described below. That JSON is a *proposal*: it\nis fed back into the 436 Generator app, validated against\n`schema/436.schema.json`, reviewed by a human, and only approved JSON is\nused to write the \u00a7436 Evaluation Word document. The LLM never fills the\nWord document and never certifies an AFTAP. PBGC will not calculate or\ncertify a plan's AFTAP.\n\n## Your task\n\nYou are gathering the inputs for a \u00a7436 Evaluation for a terminated\nsingle-employer defined-benefit pension plan. Find:\n\n1. **Case header.** Plan name, EIN/PIN, PBGC case number, DOPT, DOTR,\n   BPD, DOBF (plan date of benefit freeze), FD-PY, plan year start\n   (month-day), plan adoption date.\n2. **AFTAP history.** For each plan year from the later of the plan\n   adoption date and PY2007: the certified AFTAP %, the signed\n   certification date, the source, and the Image Viewer document number.\n   Where no certification exists, give the AFTAP stated in the AVR or\n   Form 5500 Schedule SB and say so. Flag range certifications (give\n   the range), late certifications (certified on/after Oct 1 of that\n   plan year), and recertifications (original value and date, amended\n   value and date, whether the change was material).\n3. **Part 1 answers.** For each of (b), (c), (d), (e), answer No, N/A,\n   or Yes, and give the facts behind the answer:\n   - (b) Did the plan provide a UCEB (early unreduced benefits or\n     temporary supplements due to a plant shutdown) for an event on or\n     after FD-PY2008 and before DOPT? Describe the UCEB, the group,\n     the event dates, and whether the plan paid it.\n   - (c) Did amendments increasing benefit liabilities have an adoption\n     or effective date on or after the later of the plan's adoption date\n     and FD-PY2008 and before DOPT? Give each amendment's dates,\n     description, and whether it took effect. Note the N/A reasons:\n     plan in effect less than five full plan years; increase only for\n     future periods (on or after DOPT); mandatory vesting increase;\n     only \u00a7401(a)(17) compensation limits.\n   - (d) Did the plan provide prohibited payments (non-de minimis lump\n     sums, period-certain benefits, non-life-annuity forms) with an ASD\n     or BCD on or after the later of the plan's adoption date and\n     FD-PY2008? List each payment and its date. Note if benefits did\n     not accrue on or after 09/01/2005 (state the date accruals ceased).\n   - (e) Did benefits accrue for any participant on or after the later\n     of the plan's adoption date and FD-PY2008? Give the accrual freeze\n     date and whether accruals were restored.\n4. **CBA.** Was the plan maintained under a collective bargaining\n   agreement ratified before 01/01/2008 and in effect on 01/01/2008?\n   Give the ratification, effective, and expiration dates and the IPS\n   document number.\n5. **Other facts.** Sponsor bankruptcy status and dates (for \u00a7436(d)(2)).\n   Whether the plan was a fully-insured \u00a7412(e)(3) plan and, if so, the\n   date it converted to a traditional defined benefit plan. The PBGC\n   maximum guarantee amount for any participant with a prohibited\n   payment (for the (d)(3) cap), if known.\n\n## Rules\n\n- **Summarise, do not copy verbatim \u2014 ASD STE 100 minimal style.**\n  Every value must be the **smallest string that conveys the meaning**.\n  Keep ages, service years, percentages, dollar amounts, and dates\n  **exact**. If stripping verbiage would lose meaning (a condition, an\n  exception, a date), keep the longer form.\n- **Dates are ISO format `YYYY-MM-DD`. Case number is text, with\n  leading zeros preserved (never a number).**\n- **AFTAP % is a number 0\u2013100.** A range certification goes in `kind`\n  \"range\" with the low bound as `aftap`. A late certification goes in\n  `kind` \"late\". A recertification goes in `kind` \"recertified\".\n- **Citation for every AFTAP row**: the document and the Image Viewer\n  document number where the certification or stated AFTAP appears. No\n  citation, no present answer.\n- **Do not guess.** A missing answer is a correct answer. A guessed\n  value is an error. If a certification cannot be found, say so and\n  give the AVR or Schedule SB value instead, with the source named.\n- **Never return a full masked value** (no full SSN, no full account\n  number). This evaluation lists plan-level facts and AFTAPs, not\n  participant values.\n- **You do not certify an AFTAP.** You report the AFTAPs the enrolled\n  actuary certified or the AVR / Schedule SB states, with dates and\n  sources.\n\n## Output format\n\nReturn **only** valid JSON, no markdown fences, no commentary, no\nexplanation. The JSON must have exactly these top-level keys:\n\n```json\n{\n  \"version\": \"0.1.0\",\n  \"caseData\": {\n    \"planName\": \"string\",\n    \"einPin\": \"string or null\",\n    \"caseNumber\": \"string (text, leading zeros preserved)\",\n    \"dopt\": \"YYYY-MM-DD\",\n    \"dotr\": \"YYYY-MM-DD or null\",\n    \"bpd\": \"YYYY-MM-DD or null\",\n    \"dobf\": \"YYYY-MM-DD or null\",\n    \"fdPy\": \"MM/DD or null\",\n    \"planYearStart\": \"MM-DD or null\",\n    \"toName\": \"string or null\",\n    \"toSection\": \"string or null\",\n    \"fromName\": \"string or null\",\n    \"fromSection\": \"string or null\",\n    \"memoDate\": \"YYYY-MM-DD or null\",\n    \"subject\": \"\u00a7436 Evaluation\"\n  },\n  \"history\": [\n    {\n      \"planYear\": 2008,\n      \"aftap\": 72.5,\n      \"certDate\": \"YYYY-MM-DD or null\",\n      \"source\": \"Certification | AVR | 5500 SB\",\n      \"ipsRef\": \"string or null\",\n      \"kind\": \"certified | range | late | recertified or null\"\n    }\n  ],\n  \"answers\": { \"b\": \"no | na | yes\", \"c\": \"no | na | yes\", \"d\": \"no | na | yes\", \"e\": \"no | na | yes\" },\n  \"cba\": {\n    \"ratificationDate\": \"YYYY-MM-DD or null\",\n    \"effectiveDate\": \"YYYY-MM-DD or null\",\n    \"expirationDate\": \"YYYY-MM-DD or null\",\n    \"ipsRef\": \"string or null\"\n  },\n  \"facts\": {\n    \"ucebPaid\": true | false | null,\n    \"accrualsRestored\": true | false | null,\n    \"accrualFreezeDate\": \"YYYY-MM-DD or null\",\n    \"f4022Max\": \"number or null\",\n    \"amendmentDates\": [{ \"date\": \"YYYY-MM-DD\", \"description\": \"string\" }],\n    \"paymentDates\": [{ \"date\": \"YYYY-MM-DD\", \"description\": \"string\" }]\n  }\n}\n```\n\n## Workflow reminder (for the human, not the LLM)\n\n1. Download this prompt from the 436 Generator app.\n2. Feed the plan documents and associated documents + this prompt to\n   your LLM (Microsoft Copilot in the office, any LLM at home).\n3. Take the JSON the LLM returns and upload / paste it back into the\n   436 Generator app.\n4. The app validates the JSON against the schema, flags missing /\n   uncited items, and you review and approve each one.\n5. Only approved JSON writes the filled \u00a7436 Evaluation Word document.\n   The app computes the Part 3 AFTAP table and drafts the Part 4\n   conclusions from the approved data. You review the draft before\n   download.\n";
+/* PROMPT-END */
+
+/* ---------- .docx writer (minimal OOXML, built from scratch) ---------- */
+var A36_CRC_TABLE = (function(){ var t=[],c,i,k; for(i=0;i<256;i++){ c=i; for(k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[i]=c>>>0; } return t; })();
+function a36Crc32(bytes){ var c=0xFFFFFFFF,i; for(i=0;i<bytes.length;i++) c=A36_CRC_TABLE[(c^bytes[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function a36Utf8Bytes(s){ return new TextEncoder().encode(s); }
+function a36U16(n){ return [n&0xFF,(n>>8)&0xFF]; }
+function a36U32(n){ return [n&0xFF,(n>>8)&0xFF,(n>>16)&0xFF,(n>>24)&0xFF]; }
+function a36PushBytes(out, arr){ for(var i=0;i<arr.length;i++) out.push(arr[i]); }
+function a36BuildZip(files){
+  var out = [], central = [], offset = 0, i, f;
+  for(i=0;i<files.length;i++){
+    f = files[i];
+    var name = a36Utf8Bytes(f.name);
+    var data = (typeof f.data === "string") ? a36Utf8Bytes(f.data) : f.data;
+    var crc = a36Crc32(data);
+    var localHeader = [];
+    a36PushBytes(localHeader, a36U32(0x04034b50)); a36PushBytes(localHeader, a36U16(20));
+    a36PushBytes(localHeader, a36U16(0)); a36PushBytes(localHeader, a36U16(0));
+    a36PushBytes(localHeader, a36U16(0)); a36PushBytes(localHeader, a36U16(0));
+    a36PushBytes(localHeader, a36U32(crc)); a36PushBytes(localHeader, a36U32(data.length));
+    a36PushBytes(localHeader, a36U32(data.length)); a36PushBytes(localHeader, a36U16(name.length));
+    a36PushBytes(localHeader, a36U16(0));
+    a36PushBytes(out, localHeader); a36PushBytes(out, name); a36PushBytes(out, Array.from(data));
+    var centralEntry = [];
+    a36PushBytes(centralEntry, a36U32(0x02014b50)); a36PushBytes(centralEntry, a36U16(20));
+    a36PushBytes(centralEntry, a36U16(20)); a36PushBytes(centralEntry, a36U16(0));
+    a36PushBytes(centralEntry, a36U16(0)); a36PushBytes(centralEntry, a36U16(0));
+    a36PushBytes(centralEntry, a36U16(0)); a36PushBytes(centralEntry, a36U32(crc));
+    a36PushBytes(centralEntry, a36U32(data.length)); a36PushBytes(centralEntry, a36U32(data.length));
+    a36PushBytes(centralEntry, a36U16(name.length)); a36PushBytes(centralEntry, a36U16(0));
+    a36PushBytes(centralEntry, a36U16(0)); a36PushBytes(centralEntry, a36U16(0));
+    a36PushBytes(centralEntry, a36U16(0)); a36PushBytes(centralEntry, a36U32(0));
+    a36PushBytes(centralEntry, a36U32(offset));
+    a36PushBytes(centralEntry, name);
+    central.push(centralEntry);
+    offset += localHeader.length + name.length + data.length;
+  }
+  var centralStart = offset;
+  var centralSize = 0;
+  central.forEach(function(c){ a36PushBytes(out, c); centralSize += c.length; });
+  var end = [];
+  a36PushBytes(end, a36U32(0x06054b50)); a36PushBytes(end, a36U16(0)); a36PushBytes(end, a36U16(0));
+  a36PushBytes(end, a36U16(files.length)); a36PushBytes(end, a36U16(files.length));
+  a36PushBytes(end, a36U32(centralSize)); a36PushBytes(end, a36U32(centralStart));
+  a36PushBytes(end, a36U16(0));
+  a36PushBytes(out, end);
+  return new Uint8Array(out);
+}
+function a36EscXml(s){
+  if(s === null || s === undefined) return "";
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function a36XmlPara(text, bold, size){
+  var rPr = (bold ? "<w:b/>" : "") + (size ? '<w:sz w:val="' + size + '"/>' : "");
+  return '<w:p><w:r><w:rPr>' + rPr + '</w:rPr><w:t xml:space="preserve">' + a36EscXml(text) + '</w:t></w:r></w:p>';
+}
+function a36XmlCell(text, bold){
+  return '<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>' + a36XmlPara(text, bold) + '</w:tc>';
+}
+function a36XmlTable(rows){
+  var cols = rows.length ? rows[0].length : 0;
+  var grid = '<w:tblGrid>';
+  for(var gi = 0; gi < cols; gi++) grid += '<w:gridCol w:w="1440"/>';
+  grid += '</w:tblGrid>';
+  var s = '<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/></w:tblPr>' + grid;
+  rows.forEach(function(row, ri){
+    s += '<w:tr>';
+    row.forEach(function(cell){ s += a36XmlCell(cell, ri === 0); });
+    s += '</w:tr>';
+  });
+  return s + '</w:tbl>';
+}
+function a36Fmt(v){ if(v === null || v === undefined || v === "") return ""; return String(v); }
+function a36DocxFilename(c){ var cn = (c && c.caseNumber) ? String(c.caseNumber).replace(/[^0-9A-Za-z]/g,"") : ""; return cn ? cn + "436.docx" : "436.docx"; }
+function a36BuildDocumentXml(d){
+  var c = d.caseData, hist = d.history, periods = d.periods, answers = d.answers, draft = d.draft, cba = d.cba;
+  var s = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>';
+  s += a36XmlPara("TO: " + a36Fmt(c.toName) + ", Supervisory Actuary, ASD/" + a36Fmt(c.toSection) + "    FROM: " + a36Fmt(c.fromName) + ", Actuary, ASD/" + a36Fmt(c.fromSection));
+  s += a36XmlPara("DATE: " + a36Fmt(c.memoDate));
+  s += a36XmlPara("SUBJECT: " + a36Fmt(c.subject || "§436 Evaluation"));
+  s += a36XmlPara("Plan Name: " + a36Fmt(c.planName));
+  s += a36XmlPara("EIN/PIN: " + a36Fmt(c.einPin));
+  s += a36XmlPara("PBGC Case Number: " + a36Fmt(c.caseNumber));
+  s += a36XmlPara("DOPT: " + a36Fmt(c.dopt));
+  s += a36XmlPara("DOTR: " + a36Fmt(c.dotr));
+  s += a36XmlPara("BPD: " + a36Fmt(c.bpd) + "    DOBF: " + a36Fmt(c.dobf));
+  s += a36XmlPara("FD-PY: " + a36Fmt(c.fdPy));
+  s += a36XmlPara("Part 1  Determine if §436 Limitations Potentially Apply", true, 28);
+  A36_PART1.forEach(function(q){
+    var a = answers[q.id] || "";
+    s += a36XmlPara(q.label + ": " + q.question);
+    s += a36XmlPara((a === "no" ? "[X]" : "[ ]") + " No");
+    s += a36XmlPara((a === "na" ? "[X]" : "[ ]") + " N/A");
+    s += a36XmlPara((a === "yes" ? "[X]" : "[ ]") + " Yes");
+  });
+  var prelim = a36Preliminary(answers);
+  s += a36XmlPara("Preliminary determination: " + (prelim.anyYes ? "Yes — one or more of questions 1–4 are Yes. One or more of the §436 limitations may apply. (Continue to Part 2 Further Evaluation.)" : "No — questions 1–4 are all N/A or No. None of the §436 limitations was applicable before DOPT. (Delete Parts 2–4 and proceed to Part 5 Concurrence.)"));
+  s += a36XmlPara("Part 2  Further Evaluation", true, 28);
+  s += a36XmlPara("AFTAP Certifications: certified AFTAP(s) for each plan year beginning with the later of the plan's adoption date and PY2007.");
+  var rows1 = [["Plan Year", "AFTAP", "Certification Date", "IPS Reference Number"]];
+  hist.forEach(function(r){
+    rows1.push([String(r.planYear), a36FmtPct(r.aftap), a36Fmt(r.certDate), a36Fmt(r.ipsRef)]);
+  });
+  s += a36XmlTable(rows1);
+  s += a36XmlPara("Part 3  AFTAP Table", true, 28);
+  s += a36XmlPara("Actual and presumed AFTAPs from the beginning of the 2008 plan year to DOPT.");
+  var rows2 = [["Period", "Plan Year", "AFTAP %", "Actual/Presumed", "Effective Dates"]];
+  periods.forEach(function(p){
+    rows2.push([String(p.period), String(p.planYear), p.aftapDisplay, p.basis, a36FmtMDY(a36ParseISO(p.startDate)) + " – " + a36FmtMDY(a36ParseISO(p.endDate))]);
+  });
+  s += a36XmlTable(rows2);
+  s += a36XmlPara("Part 4  436 Determination", true, 28);
+  ["b","c","d","e"].forEach(function(k){
+    s += a36XmlPara("Section 436(" + k + "):", true);
+    s += a36XmlPara(draft[k] || "");
+  });
+  s += a36XmlPara("Part 5  Reviewer Concurrence", true, 28);
+  s += a36XmlPara("Actuarial Reviewer or Section Supervisory Actuary    Date: ______________");
+  s += a36XmlPara("Actuarial Technical Reviewer    Date: ______________");
+  if(cba && (cba.ratificationDate || cba.effectiveDate || cba.expirationDate)){
+    var cb = a36CbaApplies(cba);
+    s += a36XmlPara("Collectively Bargained Plan Exception", true, 28);
+    s += a36XmlPara("Was the plan maintained pursuant to a CBA as described under 26 CFR §1.436-1(k)(2)? " + (cb.applies ? "Yes" : "No") + (cb.endDate ? " Exception applies until " + cb.endDate + "." : ""));
+    s += a36XmlTable([["Ratification Date", "Effective Date", "Expiration Date", "IPS Document Number"], [a36Fmt(cba.ratificationDate), a36Fmt(cba.effectiveDate), a36Fmt(cba.expirationDate), a36Fmt(cba.ipsRef)]]);
+  }
+  s += '</w:body></w:document>';
+  return s;
+}
+var A36_CONTENT_TYPES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>';
+var A36_RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>';
+var A36_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style></w:styles>';
+function a36BuildDocxBytes(d){
+  var doc = a36BuildDocumentXml(d);
+  return a36BuildZip([
+    { name: "[Content_Types].xml", data: A36_CONTENT_TYPES },
+    { name: "_rels/.rels", data: A36_RELS },
+    { name: "word/document.xml", data: doc },
+    { name: "word/styles.xml", data: A36_STYLES }
+  ]);
+}
+
+/* ---------- safe storage (opaque origin: file: URL localStorage throws) ---------- */
+function a36SafeStorage(){
+  try {
+    var t = window.localStorage;
+    t.getItem("__a36_test__");
+    return t;
+  } catch (e) { return null; }
+}
+var A36_THEME_KEY = "a36-theme";
+function a36LoadTheme(){
+  var st = a36SafeStorage();
+  var v = st ? st.getItem(A36_THEME_KEY) : null;
+  return v === "dark" ? "dark" : "light";
+}
+function a36SaveTheme(theme){
+  var st = a36SafeStorage();
+  if(st){ try { st.setItem(A36_THEME_KEY, theme); } catch (e) {} }
+}
+function a36ApplyTheme(theme){
+  document.documentElement.setAttribute("data-theme", theme);
+  var b = document.getElementById("theme-toggle");
+  if(b) b.textContent = theme === "dark" ? "Light" : "Dark";
+}
+function a36ToggleTheme(){
+  /* Derive the next theme from the live data-theme attribute, not from
+     storage: on an opaque origin (file: URL) storage is blocked and
+     always reads back "light", which would pin the toggle on dark. */
+  var cur = document.documentElement.getAttribute("data-theme") || "light";
+  var next = cur === "dark" ? "light" : "dark";
+  a36SaveTheme(next);
+  a36ApplyTheme(next);
+}
+
+/* ---------- state + UI ---------- */
+var A36_STATE = { caseData: {}, history: [], answers: { b: "", c: "", d: "", e: "" }, cba: { ratificationDate: "", effectiveDate: "", expirationDate: "", ipsRef: "" }, periods: [], draft: { b: "", c: "", d: "", e: "" }, step: 1 };
+function a36El(id){ return document.getElementById(id); }
+function a36ShowStep(n){
+  A36_STATE.step = n;
+  for(var i = 1; i <= 6; i++){
+    var el = a36El("step-" + i);
+    if(el) el.hidden = (i !== n);
+  }
+  var items = document.querySelectorAll("#stepper li");
+  items.forEach(function(li){
+    var s = +li.getAttribute("data-step");
+    li.classList.toggle("current", s === n);
+    li.classList.toggle("done", s < n);
+  });
+}
+function a36ReadCase(){
+  var g = function(id){ var el = a36El(id); return el ? el.value.trim() : ""; };
+  return {
+    planName: g("f-plan-name"), einPin: g("f-ein-pin"), caseNumber: g("f-case-number"),
+    dopt: g("f-dopt"), dotr: g("f-dotr"), bpd: g("f-bpd"), dobf: g("f-dobf"),
+    fdPy: g("f-fd-py"), planYearStart: g("f-plan-year-start") || "01-01",
+    toName: g("f-to-name"), toSection: g("f-to-section"), fromName: g("f-from-name"),
+    fromSection: g("f-from-section"), memoDate: g("f-memo-date"), subject: "§436 Evaluation"
+  };
+}
+function a36WriteCase(c){
+  var s = function(id, v){ var el = a36El(id); if(el) el.value = v || ""; };
+  s("f-plan-name", c.planName); s("f-ein-pin", c.einPin); s("f-case-number", c.caseNumber);
+  s("f-dopt", c.dopt); s("f-dotr", c.dotr); s("f-bpd", c.bpd); s("f-dobf", c.dobf);
+  s("f-fd-py", c.fdPy); s("f-plan-year-start", c.planYearStart);
+  s("f-to-name", c.toName); s("f-to-section", c.toSection); s("f-from-name", c.fromName);
+  s("f-from-section", c.fromSection); s("f-memo-date", c.memoDate);
+}
+function a36RenderGrid(){
+  var body = a36El("aftap-grid-body");
+  if(!body) return;
+  body.innerHTML = "";
+  A36_STATE.history.forEach(function(r, i){
+    var tr = document.createElement("tr");
+    tr.innerHTML =
+      '<td><input type="number" data-f="planYear" data-i="' + i + '" value="' + (r.planYear || "") + '" aria-label="Plan year row ' + (i+1) + '"></td>' +
+      '<td><input type="number" step="0.01" min="0" max="100" data-f="aftap" data-i="' + i + '" value="' + (r.aftap === null || r.aftap === undefined ? "" : r.aftap) + '" aria-label="AFTAP percent row ' + (i+1) + '"></td>' +
+      '<td><input type="date" data-f="certDate" data-i="' + i + '" value="' + (r.certDate || "") + '" aria-label="Certification date row ' + (i+1) + '"></td>' +
+      '<td><select data-f="source" data-i="' + i + '" aria-label="Source row ' + (i+1) + '">' +
+        A36_SOURCES.map(function(s){ return '<option' + (r.source === s ? ' selected' : '') + '>' + s + '</option>'; }).join("") +
+      '</select></td>' +
+      '<td><input type="text" data-f="ipsRef" data-i="' + i + '" value="' + (r.ipsRef || "") + '" aria-label="IPS ref row ' + (i+1) + '"></td>' +
+      '<td><button type="button" class="danger" data-del="' + i + '" aria-label="Delete row ' + (i+1) + '">Delete</button></td>';
+    body.appendChild(tr);
+  });
+  body.querySelectorAll("input,select").forEach(function(inp){
+    inp.addEventListener("change", function(){
+      var i = +inp.getAttribute("data-i"), f = inp.getAttribute("data-f");
+      var r = A36_STATE.history[i];
+      if(!r) return;
+      if(f === "planYear") r.planYear = inp.value ? +inp.value : null;
+      else if(f === "aftap") r.aftap = inp.value === "" ? null : +inp.value;
+      else r[f] = inp.value;
+      r.kind = r.kind || "certified";
+      a36ValidateGrid();
+    });
+    inp.addEventListener("paste", function(ev){ a36HandlePaste(ev, inp); });
+  });
+  body.querySelectorAll("[data-del]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      A36_STATE.history.splice(+btn.getAttribute("data-del"), 1);
+      a36RenderGrid();
+      a36ValidateGrid();
+    });
+  });
+}
+function a36ValidateGrid(){
+  var box = a36El("aftap-errors");
+  var res = a36ValidateHistory(A36_STATE.history);
+  if(box){
+    box.innerHTML = res.errors.length ? '<div class="alert">' + res.errors.map(a36EscXml).join("<br>") + '</div>' : "";
+  }
+  return res.errors.length === 0;
+}
+function a36HandlePaste(ev, inp){
+  var text = (ev.clipboardData || window.clipboardData).getData("text");
+  if(!text || text.indexOf("\t") < 0 && text.indexOf("\n") < 0) return;
+  ev.preventDefault();
+  var i = +inp.getAttribute("data-i");
+  var rows = text.trim().split(/\r?\n/);
+  rows.forEach(function(line, ri){
+    var cells = line.split("\t");
+    var idx = i + ri;
+    while(A36_STATE.history.length <= idx) A36_STATE.history.push({ planYear: null, aftap: null, certDate: "", source: "Certification", ipsRef: "", kind: "certified" });
+    var r = A36_STATE.history[idx];
+    if(cells[0]) r.planYear = +cells[0];
+    if(cells[1]) r.aftap = parseFloat(cells[1].replace("%",""));
+    if(cells[2]) r.certDate = cells[2].trim();
+    if(cells[3]) r.source = cells[3].trim();
+    if(cells[4]) r.ipsRef = cells[4].trim();
+  });
+  a36RenderGrid();
+  a36ValidateGrid();
+}
+function a36RenderPart1(){
+  var card = a36El("part1-card");
+  if(!card) return;
+  card.innerHTML = "";
+  A36_PART1.forEach(function(q){
+    var div = document.createElement("div");
+    div.innerHTML = '<p><strong>' + a36EscXml(q.label) + '</strong><br>' + a36EscXml(q.question) + '</p>' +
+      ["no","na","yes"].map(function(v){
+        return '<label class="opt"><input type="radio" name="p1-' + q.id + '" value="' + v + '"' + (A36_STATE.answers[q.id] === v ? " checked" : "") + '> ' + (v === "na" ? "N/A" : v === "no" ? "No" : "Yes") + '</label>';
+      }).join("");
+    div.querySelectorAll("input").forEach(function(inp){
+      inp.addEventListener("change", function(){ A36_STATE.answers[q.id] = inp.value; });
+    });
+    card.appendChild(div);
+  });
+}
+function a36RenderPart3(){
+  var card = a36El("part3-card");
+  if(!card) return;
+  var res = a36BuildPeriods(A36_STATE.history, A36_STATE.caseData.planYearStart || "01-01", A36_STATE.caseData.dopt, null);
+  A36_STATE.periods = res.periods;
+  var html = "";
+  if(res.errors.length) html += '<div class="alert">' + res.errors.map(a36EscXml).join("<br>") + '</div>';
+  if(!res.periods.length) html += '<p>No periods. Add AFTAP history and a DOPT first.</p>';
+  else {
+    html += '<table><thead><tr><th>Period</th><th>Plan year</th><th>AFTAP %</th><th>Actual/Presumed</th><th>Effective dates</th><th>Limits</th></tr></thead><tbody>';
+    res.periods.forEach(function(p){
+      var t = a36Thresholds(p);
+      var limits = [];
+      if(t.na) limits.push("none");
+      else {
+        if(t.b) limits.push("b"); if(t.c) limits.push("c"); if(t.d) limits.push("d"); if(t.dCap) limits.push("d-cap"); if(t.e) limits.push("e");
+      }
+      html += '<tr><td>' + p.period + '</td><td>' + p.planYear + '</td><td>' + a36EscXml(p.aftapDisplay) + '</td><td>' + p.basis + '</td><td>' + a36FmtMDY(a36ParseISO(p.startDate)) + ' – ' + a36FmtMDY(a36ParseISO(p.endDate)) + '</td><td>' + (limits.length ? limits.join(", ") : "none") + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+  card.innerHTML = html;
+}
+function a36RenderReview(){
+  var card = a36El("review-card");
+  if(!card) return;
+  var draft = a36DraftPart4(A36_STATE.answers, A36_STATE.periods, {});
+  A36_STATE.draft = draft;
+  var prelim = a36Preliminary(A36_STATE.answers);
+  var html = '<p>Preliminary determination: <strong>' + (prelim.anyYes ? "Yes — continue to Part 2." : "No — no §436 limitation applied before DOPT.") + '</strong></p>';
+  html += '<p class="small">Edit the draft Part 4 conclusions below. The app writes what you approve.</p>';
+  ["b","c","d","e"].forEach(function(k){
+    html += '<label for="draft-' + k + '">Section 436(' + k + ')</label><textarea id="draft-' + k + '" rows="4">' + a36EscXml(draft[k]) + '</textarea>';
+  });
+  card.innerHTML = html;
+  ["b","c","d","e"].forEach(function(k){
+    var ta = a36El("draft-" + k);
+    if(ta) ta.addEventListener("change", function(){ A36_STATE.draft[k] = ta.value; });
+  });
+}
+function a36RenderDownload(){
+  var card = a36El("download-card");
+  if(!card) return;
+  var c = A36_STATE.caseData;
+  card.innerHTML = '<p>File: <strong>' + a36EscXml(a36DocxFilename(c)) + '</strong></p>' +
+    '<p>Plan: ' + a36EscXml(c.planName || "") + ' · Case: ' + a36EscXml(c.caseNumber || "") + ' · DOPT: ' + a36EscXml(c.dopt || "") + '</p>' +
+    '<p>Periods: ' + A36_STATE.periods.length + ' · AFTAP rows: ' + A36_STATE.history.length + '</p>';
+}
+function a36CollectDraft(){
+  ["b","c","d","e"].forEach(function(k){
+    var ta = a36El("draft-" + k);
+    if(ta) A36_STATE.draft[k] = ta.value;
+  });
+}
+function a36Download(name, bytes){
+  var blob = bytes instanceof Uint8Array ? new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }) : new Blob([bytes], { type: "application/json" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 100);
+}
+function a36LoadDemo(){
+  A36_STATE.caseData = JSON.parse(JSON.stringify(A36_DEMO_CASE));
+  A36_STATE.history = JSON.parse(JSON.stringify(A36_DEMO_HISTORY));
+  A36_STATE.answers = JSON.parse(JSON.stringify(A36_DEMO_ANSWERS));
+  A36_STATE.cba = JSON.parse(JSON.stringify(A36_DEMO_CBA));
+  a36WriteCase(A36_STATE.caseData);
+  a36RenderGrid();
+  a36ValidateGrid();
+  a36RenderPart1();
+  a36ShowStep(2);
+}
+function a36ShowView(name){
+  ["436","welcome","help"].forEach(function(v){
+    var el = a36El("view-" + v);
+    if(el) el.hidden = (v !== name);
+  });
+  document.querySelectorAll(".nav-link").forEach(function(a){
+    if(a.getAttribute("data-view") === name) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  });
+  var views = a36El("views");
+  if(views) views.classList.remove("open");
+  var mt = a36El("menu-toggle");
+  if(mt) mt.setAttribute("aria-expanded", "false");
+}
+function a36Init(){
+  a36ApplyTheme(a36LoadTheme());
+  var tt = a36El("theme-toggle");
+  if(tt) tt.addEventListener("click", a36ToggleTheme);
+  var mt = a36El("menu-toggle");
+  if(mt) mt.addEventListener("click", function(){
+    var views = a36El("views");
+    var open = views.classList.toggle("open");
+    mt.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  document.querySelectorAll(".nav-link").forEach(function(a){
+    a.addEventListener("click", function(){ a36ShowView(a.getAttribute("data-view")); });
+  });
+  window.addEventListener("hashchange", function(){
+    var h = (location.hash || "#436").slice(1);
+    if(["436","welcome","help"].indexOf(h) >= 0) a36ShowView(h);
+  });
+  var h0 = (location.hash || "#436").slice(1);
+  if(["436","welcome","help"].indexOf(h0) >= 0) a36ShowView(h0);
+  var addRow = a36El("btn-add-row");
+  if(addRow) addRow.addEventListener("click", function(){
+    A36_STATE.history.push({ planYear: null, aftap: null, certDate: "", source: "Certification", ipsRef: "", kind: "certified" });
+    a36RenderGrid();
+  });
+  var ph = a36El("btn-paste-hint");
+  if(ph) ph.addEventListener("click", function(){
+    var el = a36El("paste-hint");
+    if(el) el.hidden = !el.hidden;
+  });
+  var demo = a36El("btn-demo");
+  if(demo) demo.addEventListener("click", a36LoadDemo);
+  var wd = a36El("btn-welcome-demo");
+  if(wd) wd.addEventListener("click", function(){ a36ShowView("436"); a36LoadDemo(); });
+  var to2 = a36El("btn-to-step2");
+  if(to2) to2.addEventListener("click", function(){
+    A36_STATE.caseData = a36ReadCase();
+    var res = a36ValidateCase(A36_STATE.caseData);
+    if(res.errors.length){ alert(res.errors.join("\n")); return; }
+    if(!A36_STATE.history.length) A36_STATE.history.push({ planYear: null, aftap: null, certDate: "", source: "Certification", ipsRef: "", kind: "certified" });
+    a36RenderGrid(); a36ValidateGrid(); a36ShowStep(2);
+  });
+  var b1 = a36El("btn-back1");
+  if(b1) b1.addEventListener("click", function(){ a36ShowStep(1); });
+  var to3 = a36El("btn-to-step3");
+  if(to3) to3.addEventListener("click", function(){
+    if(!a36ValidateGrid()){ alert("Fix the AFTAP history errors first."); return; }
+    a36RenderPart1(); a36ShowStep(3);
+  });
+  var b2 = a36El("btn-back2");
+  if(b2) b2.addEventListener("click", function(){ a36ShowStep(2); });
+  var to4 = a36El("btn-to-step4");
+  if(to4) to4.addEventListener("click", function(){ a36RenderPart3(); a36ShowStep(4); });
+  var b3 = a36El("btn-back3");
+  if(b3) b3.addEventListener("click", function(){ a36ShowStep(3); });
+  var to5 = a36El("btn-to-step5");
+  if(to5) to5.addEventListener("click", function(){ a36RenderReview(); a36ShowStep(5); });
+  var b4 = a36El("btn-back4");
+  if(b4) b4.addEventListener("click", function(){ a36ShowStep(4); });
+  var to6 = a36El("btn-to-step6");
+  if(to6) to6.addEventListener("click", function(){ a36CollectDraft(); a36RenderDownload(); a36ShowStep(6); });
+  var b5 = a36El("btn-back5");
+  if(b5) b5.addEventListener("click", function(){ a36ShowStep(5); });
+  var dl = a36El("btn-download-docx");
+  if(dl) dl.addEventListener("click", function(){
+    a36CollectDraft();
+    var data = { caseData: A36_STATE.caseData, history: A36_STATE.history, periods: A36_STATE.periods, answers: A36_STATE.answers, draft: A36_STATE.draft, cba: A36_STATE.cba };
+    a36Download(a36DocxFilename(A36_STATE.caseData), a36BuildDocxBytes(data));
+  });
+  var dj = a36El("btn-download-json");
+  if(dj) dj.addEventListener("click", function(){
+    a36CollectDraft();
+    var data = { version: A36_VERSION, caseData: A36_STATE.caseData, history: A36_STATE.history, answers: A36_STATE.answers, draft: A36_STATE.draft, cba: A36_STATE.cba };
+    a36Download("436_inputs_" + (A36_STATE.caseData.caseNumber || "case") + ".json", JSON.stringify(data, null, 2));
+  });
+  a36RenderGrid();
+  a36RenderPart1();
+  a36ShowStep(1);
+}
+if(typeof document !== "undefined" && document.readyState !== "loading"){ a36Init(); }
+else if(typeof document !== "undefined"){ document.addEventListener("DOMContentLoaded", a36Init); }
+
+var A36 = {
+  VERSION: A36_VERSION,
+  buildPeriods: a36BuildPeriods, thresholds: a36Thresholds, aftapAt: a36AftapAt,
+  preliminary: a36Preliminary, cbaApplies: a36CbaApplies, draftPart4: a36DraftPart4,
+  validateHistory: a36ValidateHistory, validateCase: a36ValidateCase,
+  buildDocxBytes: a36BuildDocxBytes, buildDocumentXml: a36BuildDocumentXml,
+  docxFilename: a36DocxFilename, fmtPct: a36FmtPct,
+  DEMO_CASE: A36_DEMO_CASE, DEMO_HISTORY: A36_DEMO_HISTORY, DEMO_ANSWERS: A36_DEMO_ANSWERS, DEMO_CBA: A36_DEMO_CBA,
+  PART1: A36_PART1
+};
+if(typeof globalThis !== "undefined") globalThis.A36 = A36;
+</script>
+</body>
+</html>
